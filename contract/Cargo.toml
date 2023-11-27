@@ -1,24 +1,26 @@
 [package]
-name = "ft-lockup"
+name = "hodl-lockup"
 version = "1.0.0"
-authors = ["Eugene The Dream <ek@proximity.dev>"]
-edition = "2018"
+authors = ["Sweat Economy"]
+edition = "2021"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+integration-test = []
 
 [dependencies]
-near-sdk = "3.1.0"
-near-contract-standards = "3.1.0"
-uint = { version = "0.9.0", default-features = false }
+
+near-sdk = { workspace = true }
+near-contract-standards = { workspace = true }
+
+model = { workspace = true }
 
 [dev-dependencies]
-near-sdk-sim = "3.2.0"
-
-[profile.release]
-codegen-units=1
-opt-level = "z"
-lto = true
-debug = false
-panic = "abort"
-overflow-checks = true
+fake = { workspace = true }
+rand = { workspace = true }
+sha256 = { workspace = true }
+crypto-hash = "0.3"
+base64 = { workspace = true }
