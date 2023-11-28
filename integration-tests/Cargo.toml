@@ -21,3 +21,5 @@ integration-utils = { workspace = true }
 sweat-model = { workspace = true }
 sweat-integration = { workspace = true }
 
+multisig-model = { workspace = true }
+multisig-integration = { workspace = true }

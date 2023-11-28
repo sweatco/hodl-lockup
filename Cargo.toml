@@ -25,7 +25,10 @@ near-sdk = { git = "https://github.com/sweatco/near-sdk-rs", rev = "8c48b26cc48d
 near-contract-standards = { git = "https://github.com/sweatco/near-sdk-rs", rev = "8c48b26cc48d969c1e5f3162141fe9c824fccecd" }
 
 integration-trait = { git = "https://github.com/sweatco/integration-trait.git", rev = "8dd8b63cef5e60448629a8903ea43b642bbf9f45" }
-integration-utils = { git = "https://github.com/sweatco/integration-utils.git", rev = "0b3c2faf0db31cdb3481be4d35dbb48b62a98618" }
+integration-utils = { git = "https://github.com/sweatco/integration-utils.git", rev = "1b05c03351009c901a45400687c24f685f8b81c3" }
 
 sweat-model = { git = "https://github.com/sweatco/sweat-near", rev = "f8709a20edeb06c8196306f5fe6025cae21a854e" }
 sweat-integration = { git = "https://github.com/sweatco/sweat-near", rev = "f8709a20edeb06c8196306f5fe6025cae21a854e" }
+
+multisig-model = { git = "https://github.com/sweatco/multisig", rev = "0c6345a75cb54bc2d5806019840c96d5cf32e637" }
+multisig-integration = { git = "https://github.com/sweatco/multisig", rev = "0c6345a75cb54bc2d5806019840c96d5cf32e637" }
