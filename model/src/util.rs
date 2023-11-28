@@ -1,16 +1,17 @@
-use crate::*;
+use near_sdk::{env, Timestamp};
 
-pub(crate) fn nano_to_sec(timestamp: Timestamp) -> TimestampSec {
-    (timestamp / 10u64.pow(9)) as _
+use crate::TimestampSec;
+
+pub fn nano_to_sec(timestamp: Timestamp) -> TimestampSec {
+    (timestamp / 10u64.pow(9)).try_into().unwrap()
 }
 
-pub(crate) fn current_timestamp_sec() -> TimestampSec {
+pub fn current_timestamp_sec() -> TimestampSec {
     nano_to_sec(env::block_timestamp())
 }
 
 pub mod u128_dec_format {
-    use near_sdk::serde::de;
-    use near_sdk::serde::{Deserialize, Deserializer, Serializer};
+    use near_sdk::serde::{de, Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(num: &u128, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -23,8 +24,6 @@ pub mod u128_dec_format {
     where
         D: Deserializer<'de>,
     {
-        String::deserialize(deserializer)?
-            .parse()
-            .map_err(de::Error::custom)
+        String::deserialize(deserializer)?.parse().map_err(de::Error::custom)
     }
 }

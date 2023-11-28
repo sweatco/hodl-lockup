@@ -1,4 +1,10 @@
-use crate::*;
+use model::{draft::DraftGroupIndex, lockup::LockupCreate};
+
+use crate::{
+    emit, env, log, near_bindgen, serde_json, AccountId, Contract, ContractExt, Deserialize, EventKind,
+    FtLockupCreateLockup, FtLockupFundDraftGroup, FungibleTokenReceiver, PromiseOrValue, Serialize, GAS_EXT_CALL_COST,
+    GAS_MIN_FOR_CONVERT, U128,
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
@@ -18,19 +24,10 @@ pub enum FtMessage {
 
 #[near_bindgen]
 impl FungibleTokenReceiver for Contract {
-    fn ft_on_transfer(
-        &mut self,
-        sender_id: ValidAccountId,
-        amount: U128,
-        msg: String,
-    ) -> PromiseOrValue<U128> {
-        assert_eq!(
-            env::predecessor_account_id(),
-            self.token_account_id,
-            "Invalid token ID"
-        );
+    fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) -> PromiseOrValue<U128> {
+        assert_eq!(env::predecessor_account_id(), self.token_account_id, "Invalid token ID");
         let amount = amount.into();
-        self.assert_deposit_whitelist(sender_id.as_ref());
+        self.assert_deposit_whitelist(&sender_id);
 
         let ft_message: FtMessage = serde_json::from_str(&msg).unwrap();
         match ft_message {
@@ -62,23 +59,22 @@ impl FungibleTokenReceiver for Contract {
 
                 if funding.try_convert.unwrap_or(false) {
                     // Using remaining gas to try convert drafts, not waiting for results
-                    if let Some(remaining_gas) =
-                        env::prepaid_gas().checked_sub(env::used_gas() + GAS_EXT_CALL_COST)
+                    if let Some(remaining_gas) = env::prepaid_gas()
+                        .0
+                        .checked_sub((env::used_gas() + GAS_EXT_CALL_COST).into())
                     {
-                        if remaining_gas > GAS_MIN_FOR_CONVERT {
-                            ext_self::convert_drafts(
-                                draft_group.draft_indices.into_iter().collect(),
-                                &env::current_account_id(),
-                                NO_DEPOSIT,
-                                remaining_gas,
-                            );
+                        if remaining_gas > GAS_MIN_FOR_CONVERT.into() {
+                            crate::callbacks::ext_self::ext(env::current_account_id())
+                                .with_static_gas(remaining_gas.into())
+                                .convert_drafts(draft_group.draft_indices.into_iter().collect());
                         }
                     }
                 }
-                let event = FtLockupFundDraftGroup {
-                    id: draft_group_id,
-                    amount: amount.into(),
-                };
+                let event =
+                    FtLockupFundDraftGroup {
+                        id: draft_group_id,
+                        amount: amount.into(),
+                    };
                 emit(EventKind::FtLockupFundDraftGroup(vec![event]));
             }
         }

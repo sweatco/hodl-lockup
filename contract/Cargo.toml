@@ -1,0 +1,26 @@
+[package]
+name = "hodl-lockup"
+version = "1.0.0"
+authors = ["Sweat Economy"]
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+integration-test = []
+
+[dependencies]
+
+near-sdk = { workspace = true }
+near-contract-standards = { workspace = true }
+
+model = { workspace = true }
+
+[dev-dependencies]
+fake = { workspace = true }
+rand = { workspace = true }
+sha256 = { workspace = true }
+crypto-hash = "0.3"
+base64 = { workspace = true }
