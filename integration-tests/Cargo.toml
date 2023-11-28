@@ -8,9 +8,13 @@ edition = "2021"
 name = "integration_tests"
 
 [dependencies]
+base58 = "0.2.0"
+
+rand = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+ed25519-dalek = { workspace = true }
 
 near-sdk = { workspace = true }
 near-workspaces = { workspace = true }

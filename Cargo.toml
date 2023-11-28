@@ -16,6 +16,7 @@ base64 = "0.21.3"
 sha256 = "1.3.0"
 tokio = { version = "1.28" }
 uint = "0.9.5"
+ed25519-dalek = {  version = "2.1.0", features = ["rand_core"] }
 
 near-workspaces = "0.9.0"
 
@@ -25,10 +26,10 @@ near-sdk = { git = "https://github.com/sweatco/near-sdk-rs", rev = "8c48b26cc48d
 near-contract-standards = { git = "https://github.com/sweatco/near-sdk-rs", rev = "8c48b26cc48d969c1e5f3162141fe9c824fccecd" }
 
 integration-trait = { git = "https://github.com/sweatco/integration-trait.git", rev = "8dd8b63cef5e60448629a8903ea43b642bbf9f45" }
-integration-utils = { git = "https://github.com/sweatco/integration-utils.git", rev = "1b05c03351009c901a45400687c24f685f8b81c3" }
+integration-utils = { git = "https://github.com/sweatco/integration-utils.git", rev = "5e381a0188649d84b820bb707af1af553a046a43" }
 
-sweat-model = { git = "https://github.com/sweatco/sweat-near", rev = "f8709a20edeb06c8196306f5fe6025cae21a854e" }
-sweat-integration = { git = "https://github.com/sweatco/sweat-near", rev = "f8709a20edeb06c8196306f5fe6025cae21a854e" }
+sweat-model = { git = "https://github.com/sweatco/sweat-near", rev = "97b1a04160ca26eedafc09f7f6d31dbdee2f1d5d" }
+sweat-integration = { git = "https://github.com/sweatco/sweat-near", rev = "97b1a04160ca26eedafc09f7f6d31dbdee2f1d5d" }
 
-multisig-model = { git = "https://github.com/sweatco/multisig", rev = "0c6345a75cb54bc2d5806019840c96d5cf32e637" }
-multisig-integration = { git = "https://github.com/sweatco/multisig", rev = "0c6345a75cb54bc2d5806019840c96d5cf32e637" }
+multisig-model = { git = "https://github.com/sweatco/multisig", rev = "d3ff7caee6828ada48157f06bfba04f661d7fc7d" }
+multisig-integration = { git = "https://github.com/sweatco/multisig", rev = "d3ff7caee6828ada48157f06bfba04f661d7fc7d" }

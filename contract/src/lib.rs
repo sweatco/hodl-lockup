@@ -161,16 +161,15 @@ impl LockupApi for Contract {
         } else {
             let lockups_by_id: HashMap<LockupIndex, Lockup> =
                 self.internal_get_account_lockups(&account_id).into_iter().collect();
-            let amounts: HashMap<LockupIndex, WrappedBalance> =
-                lockups_by_id
-                    .iter()
-                    .map(|(lockup_id, lockup)| {
-                        let unlocked_balance = lockup.schedule.unlocked_balance(current_timestamp_sec());
-                        let amount: WrappedBalance = (unlocked_balance - lockup.claimed_balance).into();
+            let amounts: HashMap<LockupIndex, WrappedBalance> = lockups_by_id
+                .iter()
+                .map(|(lockup_id, lockup)| {
+                    let unlocked_balance = lockup.schedule.unlocked_balance(current_timestamp_sec());
+                    let amount: WrappedBalance = (unlocked_balance - lockup.claimed_balance).into();
 
-                        (*lockup_id, amount)
-                    })
-                    .collect();
+                    (*lockup_id, amount)
+                })
+                .collect();
             (amounts, lockups_by_id)
         };
 
@@ -412,7 +411,9 @@ impl LockupApi for Contract {
             self.draft_groups.insert(&draft_group_id as _, &draft_group);
         }
 
-        emit(EventKind::FtLockupDiscardDraftGroup(vec![FtLockupDiscardDraftGroup { id: draft_group_id }]));
+        emit(EventKind::FtLockupDiscardDraftGroup(vec![FtLockupDiscardDraftGroup {
+            id: draft_group_id,
+        }]));
     }
 
     fn delete_drafts(&mut self, draft_ids: Vec<DraftIndex>) {

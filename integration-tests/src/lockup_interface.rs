@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use integration_utils::integration_contract::IntegrationContract;
+use integration_utils::{integration_contract::IntegrationContract, misc::ToNear};
 use model::{
     draft::{Draft, DraftGroupIndex, DraftIndex},
     lockup::LockupIndex,
@@ -28,7 +28,7 @@ impl LockupApiIntegration for LockupContract<'_> {
         deposit_whitelist: Vec<AccountId>,
         draft_operators_whitelist: Option<Vec<AccountId>>,
     ) -> Result<()> {
-        self.call_contract(
+        self.call(
             "new",
             json!({
                 "token_account_id": token_account_id,
@@ -40,7 +40,7 @@ impl LockupApiIntegration for LockupContract<'_> {
     }
 
     async fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> Result<WrappedBalance> {
-        self.call_contract(
+        self.call(
             "claim",
             json!({
                 "amounts": amounts
@@ -55,7 +55,7 @@ impl LockupApiIntegration for LockupContract<'_> {
         hashed_schedule: Option<Schedule>,
         termination_timestamp: Option<TimestampSec>,
     ) -> Result<WrappedBalance> {
-        self.call_contract(
+        self.call(
             "terminate",
             json!({
                 "lockup_index": lockup_index,
@@ -71,7 +71,7 @@ impl LockupApiIntegration for LockupContract<'_> {
         account_id: Option<AccountId>,
         account_ids: Option<Vec<AccountId>>,
     ) -> Result<()> {
-        self.call_contract(
+        self.call(
             "add_to_deposit_whitelist",
             json!({
                 "account_id": account_id,
@@ -86,7 +86,7 @@ impl LockupApiIntegration for LockupContract<'_> {
         account_id: Option<AccountId>,
         account_ids: Option<Vec<AccountId>>,
     ) -> Result<()> {
-        self.call_contract(
+        self.call(
             "remove_from_deposit_whitelist",
             json!({
                 "account_id": account_id,
@@ -97,7 +97,7 @@ impl LockupApiIntegration for LockupContract<'_> {
     }
 
     async fn add_to_draft_operators_whitelist(&mut self, account_ids: Vec<AccountId>) -> Result<()> {
-        self.call_contract(
+        self.call(
             "add_to_draft_operators_whitelist",
             json!({
                 "account_ids": account_ids
@@ -107,7 +107,7 @@ impl LockupApiIntegration for LockupContract<'_> {
     }
 
     async fn remove_from_draft_operators_whitelist(&mut self, account_ids: Vec<AccountId>) -> Result<()> {
-        self.call_contract(
+        self.call(
             "remove_from_draft_operators_whitelist",
             json!({
                 "account_ids": account_ids
@@ -117,11 +117,11 @@ impl LockupApiIntegration for LockupContract<'_> {
     }
 
     async fn create_draft_group(&mut self) -> Result<DraftGroupIndex> {
-        self.call_contract("create_draft_group", ()).await
+        self.call("create_draft_group", ()).await
     }
 
     async fn create_draft(&mut self, draft: Draft) -> Result<DraftIndex> {
-        self.call_contract(
+        self.call(
             "create_draft",
             json!({
                 "draft": draft
@@ -131,7 +131,7 @@ impl LockupApiIntegration for LockupContract<'_> {
     }
 
     async fn create_drafts(&mut self, drafts: Vec<Draft>) -> Result<Vec<DraftIndex>> {
-        self.call_contract(
+        self.call(
             "create_drafts",
             json!({
                 "drafts": drafts
@@ -141,7 +141,7 @@ impl LockupApiIntegration for LockupContract<'_> {
     }
 
     async fn convert_draft(&mut self, draft_id: DraftIndex) -> Result<LockupIndex> {
-        self.call_contract(
+        self.call(
             "convert_draft",
             json!({
                 "draft_id": draft_id
@@ -151,7 +151,7 @@ impl LockupApiIntegration for LockupContract<'_> {
     }
 
     async fn discard_draft_group(&mut self, draft_group_id: DraftGroupIndex) -> Result<()> {
-        self.call_contract(
+        self.call(
             "discard_draft_group",
             json!({
                 "draft_group_id": draft_group_id
@@ -161,7 +161,7 @@ impl LockupApiIntegration for LockupContract<'_> {
     }
 
     async fn delete_drafts(&mut self, draft_ids: Vec<DraftIndex>) -> Result<()> {
-        self.call_contract(
+        self.call(
             "delete_drafts",
             json!({
                 "draft_ids": draft_ids
@@ -184,14 +184,21 @@ impl<'a> IntegrationContract<'a> for LockupContract<'a> {
         self
     }
 
-    fn user_account(&self) -> Account {
-        self.account
-            .as_ref()
-            .expect("Set account with `user` method first")
-            .clone()
+    fn user_account(&self) -> Option<Account> {
+        self.account.clone()
     }
 
     fn contract(&self) -> &'a Contract {
         self.contract
+    }
+}
+
+pub trait GetContractAccount {
+    fn contract_account(&self) -> AccountId;
+}
+
+impl<'a, T: IntegrationContract<'a>> GetContractAccount for T {
+    fn contract_account(&self) -> AccountId {
+        self.contract().as_account().to_near()
     }
 }
