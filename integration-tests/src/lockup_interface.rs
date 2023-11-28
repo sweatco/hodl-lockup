@@ -10,9 +10,8 @@ use model::{
     schedule::Schedule,
     TimestampSec, WrappedBalance,
 };
-use near_sdk::AccountId;
+use near_sdk::{serde_json::json, AccountId};
 use near_workspaces::{Account, Contract};
-use serde_json::json;
 
 pub const LOCKUP_CONTRACT: &str = "hodl_lockup";
 
