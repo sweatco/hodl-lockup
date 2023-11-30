@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use std::{env, fs, str::FromStr};
+use std::str::FromStr;
 
 use anyhow::Result;
 use integration_utils::integration_contract::IntegrationContract;
@@ -12,13 +12,14 @@ use multisig_model::{
 };
 use near_sdk::json_types::U128;
 use near_workspaces::{
-    types::{AccountDetails, Gas, KeyType, SecretKey},
+    types::{AccountDetails, Gas, KeyType, NearToken, SecretKey},
     Account, AccountId,
 };
 
 use crate::{
     context::{prepare_contract, Context, IntegrationContext},
     lockup_interface::GetContractAccount,
+    utils::load_wasm,
 };
 
 #[tokio::test]
@@ -30,12 +31,7 @@ async fn update_contract() -> Result<()> {
     let lockup_account_id = context.lockup().contract_account();
     let multisig_account_id = context.multisig().contract_account();
 
-    dbg!(&multisig_account_id);
-    dbg!(&lockup_account_id);
-
     context.lockup().set_multisig(multisig_account_id.clone()).await?;
-
-    dbg!(context.lockup().contract().view_access_keys().await?);
 
     assert_eq!(0, context.multisig().get_num_confirmations().await?);
 
@@ -56,8 +52,6 @@ async fn update_contract() -> Result<()> {
         })
         .collect();
 
-    dbg!(&signers_accounts);
-
     add_keys(context.multisig(), &signers).await?;
 
     context
@@ -72,8 +66,14 @@ async fn update_contract() -> Result<()> {
 
     let wasm = load_wasm("../res/hodl_lockup.wasm")?;
 
+    update_with_method_call(&mut context, &signers_accounts, &wasm).await?;
+
     update_with_multisig(&mut context, &signers_accounts, &wasm).await?;
 
+    Ok(())
+}
+
+async fn update_with_method_call(context: &mut Context, signers_accounts: &[Account], wasm: &[u8]) -> Result<()> {
     let update_request = context
         .multisig()
         .with_user(&signers_accounts[0])
@@ -81,8 +81,8 @@ async fn update_contract() -> Result<()> {
             receiver_id: context.lockup().contract_account(),
             actions: vec![MultiSigRequestAction::FunctionCall {
                 method_name: "update_contract_kok".to_string(),
-                args: vec![].into(), //wasm.into(),
-                deposit: U128(10000000000000000000000000000000000),
+                args: wasm.to_vec().into(),
+                deposit: U128(NearToken::from_near(10).as_yoctonear()),
                 gas: Gas::from_tgas(300).as_gas().into(),
             }],
         })
@@ -140,7 +140,7 @@ async fn add_keys(mut multisig: Multisig<'_>, signers: &[SecretKey]) -> Result<(
         .map(|key| MultiSigRequestAction::AddKey {
             public_key: to_near_pk(key.public_key()),
             permission: FunctionCallPermission {
-                allowance: U128(18376705513618804849920000).into(),
+                allowance: U128(NearToken::from_near(5).as_yoctonear()).into(),
                 receiver_id: multisig.contract_account(),
                 method_names: ["add_request", "add_request_and_confirm", "delete_request", "confirm"]
                     .into_iter()
@@ -159,13 +159,6 @@ async fn add_keys(mut multisig: Multisig<'_>, signers: &[SecretKey]) -> Result<(
         .await?;
 
     Ok(())
-}
-
-fn load_wasm(wasm_path: &str) -> Result<Vec<u8>> {
-    let current_dir = env::current_dir()?;
-    let wasm_filepath = fs::canonicalize(current_dir.join(wasm_path))?;
-    let data = fs::read(wasm_filepath)?;
-    Ok(data)
 }
 
 fn to_near_pk(key: near_workspaces::types::PublicKey) -> near_sdk::PublicKey {

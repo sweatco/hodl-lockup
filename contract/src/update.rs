@@ -1,11 +1,12 @@
-use near_sdk::{env, near_bindgen, AccountId, Promise};
+use model::update::UpdateApi;
+use near_sdk::{env, near_bindgen, AccountId, Promise, PromiseOrValue};
 
 use crate::{Contract, ContractExt};
 
 #[near_bindgen]
-impl Contract {
+impl UpdateApi for Contract {
     #[payable]
-    pub fn update_contract(&mut self) -> Promise {
+    fn update_contract(&mut self) -> PromiseOrValue<()> {
         let Some(ref multisig) = self.miltisig else {
             env::panic_str("Multisig account is not set. Operation is impossible");
         };
@@ -23,10 +24,11 @@ impl Contract {
         Promise::new(env::current_account_id())
             .deploy_contract(code)
             .as_return()
+            .into()
     }
 
     #[private]
-    pub fn set_multisig(&mut self, multisig: AccountId) {
+    fn set_multisig(&mut self, multisig: AccountId) {
         self.miltisig = multisig.into();
     }
 }

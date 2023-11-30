@@ -1,3 +1,5 @@
 pub mod context;
 mod lockup_interface;
-mod update_contract;
+mod multisig_update;
+mod simple_update;
+mod utils;
