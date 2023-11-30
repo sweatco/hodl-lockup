@@ -30,6 +30,7 @@ pub mod event;
 pub mod ft_token_receiver;
 pub mod internal;
 
+mod update;
 pub mod view;
 
 use crate::{
@@ -74,6 +75,8 @@ pub struct Contract {
     pub drafts: LookupMap<DraftIndex, Draft>,
     pub next_draft_group_id: DraftGroupIndex,
     pub draft_groups: UnorderedMap<DraftGroupIndex, DraftGroup>,
+
+    pub miltisig: Option<AccountId>,
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
@@ -131,6 +134,7 @@ impl LockupApi for Contract {
             drafts: LookupMap::new(StorageKey::Drafts),
             next_draft_group_id: 0,
             draft_groups: UnorderedMap::new(StorageKey::DraftGroups),
+            miltisig: None,
         }
     }
 

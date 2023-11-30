@@ -5,6 +5,7 @@ pub mod lockup;
 pub mod lockup_api;
 pub mod schedule;
 pub mod termination;
+pub mod update;
 pub mod util;
 pub mod view_api;
 

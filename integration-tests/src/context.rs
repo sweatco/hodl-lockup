@@ -12,7 +12,7 @@ use sweat_model::SweatApiIntegration;
 
 use crate::lockup_interface::{GetContractAccount, LockupContract, LOCKUP_CONTRACT};
 
-pub type Context = integration_utils::context::Context<near_workspaces::network::Testnet>;
+pub type Context = integration_utils::context::Context<near_workspaces::network::Sandbox>;
 
 #[async_trait]
 pub trait IntegrationContext {

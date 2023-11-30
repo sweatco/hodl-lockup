@@ -8,9 +8,10 @@ use model::{
     lockup::LockupIndex,
     lockup_api::LockupApiIntegration,
     schedule::Schedule,
+    update::UpdateApiIntegration,
     TimestampSec, WrappedBalance,
 };
-use near_sdk::{serde_json::json, AccountId};
+use near_sdk::{serde_json::json, AccountId, Promise};
 use near_workspaces::{Account, Contract};
 
 pub const LOCKUP_CONTRACT: &str = "hodl_lockup";
@@ -165,6 +166,23 @@ impl LockupApiIntegration for LockupContract<'_> {
             "delete_drafts",
             json!({
                 "draft_ids": draft_ids
+            }),
+        )
+        .await
+    }
+}
+
+#[async_trait]
+impl<'a> UpdateApiIntegration for LockupContract<'a> {
+    async fn update_contract(&mut self, _code: Vec<u8>) -> Result<Promise> {
+        unreachable!("This method should not be called directly")
+    }
+
+    async fn set_multisig(&mut self, multisig: AccountId) -> Result<()> {
+        self.call(
+            "set_multisig",
+            json!({
+                "multisig": multisig
             }),
         )
         .await
