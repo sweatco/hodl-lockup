@@ -12,14 +12,14 @@ use multisig_model::{
 };
 use near_sdk::json_types::U128;
 use near_workspaces::{
-    types::{AccountDetails, Gas, KeyType, NearToken, SecretKey},
+    types::{Gas, KeyType, NearToken, SecretKey},
     Account, AccountId,
 };
 
 use crate::{
     context::{prepare_contract, Context, IntegrationContext},
     lockup_interface::GetContractAccount,
-    utils::load_wasm,
+    utils::{load_wasm, AccountExtension},
 };
 
 #[tokio::test]
@@ -28,7 +28,6 @@ async fn update_contract() -> Result<()> {
 
     let mut context = prepare_contract().await?;
 
-    let lockup_account_id = context.lockup().contract_account();
     let multisig_account_id = context.multisig().contract_account();
 
     context.lockup().set_multisig(multisig_account_id.clone()).await?;
@@ -64,6 +63,8 @@ async fn update_contract() -> Result<()> {
 
     assert_eq!(2, context.multisig().get_num_confirmations().await?);
 
+    redeploy_multisig(&mut context, &signers_accounts).await?;
+
     let wasm = load_wasm("../res/hodl_lockup.wasm")?;
 
     update_with_method_call(&mut context, &signers_accounts, &wasm).await?;
@@ -74,6 +75,10 @@ async fn update_contract() -> Result<()> {
 }
 
 async fn update_with_method_call(context: &mut Context, signers_accounts: &[Account], wasm: &[u8]) -> Result<()> {
+    println!("👷🏽 update_with_method_call");
+
+    dbg!(signers_accounts[0].near_balance().await?);
+
     let update_request = context
         .multisig()
         .with_user(&signers_accounts[0])
@@ -92,9 +97,7 @@ async fn update_with_method_call(context: &mut Context, signers_accounts: &[Acco
 
     assert_eq!(1, confirmations.len());
 
-    let account_view: AccountDetails = signers_accounts[1].view_account().await?;
-
-    dbg!(&account_view);
+    dbg!(signers_accounts[1].near_balance().await?);
 
     let confirmed = context
         .multisig()
@@ -112,6 +115,8 @@ async fn update_with_method_call(context: &mut Context, signers_accounts: &[Acco
 }
 
 async fn update_with_multisig(context: &mut Context, signers_accounts: &[Account], wasm: &[u8]) -> Result<()> {
+    println!("👷🏽 update_with_multisig");
+
     let update_request = context
         .multisig()
         .with_user(&signers_accounts[0])
@@ -130,6 +135,45 @@ async fn update_with_multisig(context: &mut Context, signers_accounts: &[Account
         .await?;
 
     dbg!(&confirmed);
+
+    Ok(())
+}
+
+async fn redeploy_multisig(context: &mut Context, signers_accounts: &[Account]) -> Result<()> {
+    println!("👷🏽 redeploy_multisig");
+
+    let wasm = load_wasm("../res/multisig.wasm")?;
+
+    let request_id = context
+        .multisig()
+        .with_user(&signers_accounts[0])
+        .add_request(MultiSigRequest {
+            receiver_id: context.multisig().contract_account(),
+            actions: vec![MultiSigRequestAction::DeployContract {
+                code: wasm.to_vec().into(),
+            }],
+        })
+        .await?;
+
+    assert_eq!([request_id], context.multisig().list_request_ids().await?.as_slice());
+    assert_eq!(0, context.multisig().get_confirmations(request_id).await?.len());
+
+    context
+        .multisig()
+        .with_user(&signers_accounts[0])
+        .confirm(request_id)
+        .await?;
+
+    assert_eq!([request_id], context.multisig().list_request_ids().await?.as_slice());
+    assert_eq!(1, context.multisig().get_confirmations(request_id).await?.len());
+
+    context
+        .multisig()
+        .with_user(&signers_accounts[1])
+        .confirm(request_id)
+        .await?;
+
+    assert!(context.multisig().list_request_ids().await?.is_empty());
 
     Ok(())
 }

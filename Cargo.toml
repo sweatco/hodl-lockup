@@ -31,5 +31,5 @@ integration-utils = { git = "https://github.com/sweatco/integration-utils.git", 
 sweat-model = { git = "https://github.com/sweatco/sweat-near", rev = "5e4566ba7e2a46bbd4a979574c4ccd9c6f4fc9db" }
 sweat-integration = { git = "https://github.com/sweatco/sweat-near", rev = "5e4566ba7e2a46bbd4a979574c4ccd9c6f4fc9db" }
 
-multisig-model = { git = "https://github.com/sweatco/multisig", rev = "3fbf55f4f4e3be26fddd21b825a07c6632a9f24f" }
-multisig-integration = { git = "https://github.com/sweatco/multisig", rev = "3fbf55f4f4e3be26fddd21b825a07c6632a9f24f" }
+multisig-model = { git = "https://github.com/sweatco/multisig", rev = "0e2b6523177571d659d2a36bf5a5195e3dffae9e" }
+multisig-integration = { git = "https://github.com/sweatco/multisig", rev = "0e2b6523177571d659d2a36bf5a5195e3dffae9e" }
