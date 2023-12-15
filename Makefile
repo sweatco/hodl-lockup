@@ -15,6 +15,9 @@ build-in-docker: ##@Build Build reproducible artifact in Docker.
 build-integration: ##@Build Build the contract for integration tests.
 	./scripts/build-integration.sh
 
+build-utils: ##@Build utils contract for integration tests.
+	./scripts/build-utils.sh
+
 dock: build-in-docker ##@Build Shorthand for `build-in-docker`
 
 deploy: ##@Deploy Deploy the contract to dev account on Testnet.

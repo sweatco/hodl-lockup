@@ -1,6 +1,7 @@
 use model::{
     draft::{DraftGroup, DraftGroupIndex, DraftIndex},
     lockup::{Lockup, LockupClaim, LockupIndex},
+    schedule::Schedule,
     util::current_timestamp_sec,
     WrappedBalance,
 };
@@ -15,6 +16,8 @@ pub trait SelfCallbacks {
     fn after_ft_transfer(&mut self, account_id: AccountId, lockup_claims: Vec<LockupClaim>) -> WrappedBalance;
 
     fn after_lockup_termination(&mut self, account_id: AccountId, amount: WrappedBalance) -> WrappedBalance;
+
+    fn after_lockup_recall(&mut self, lockup_index: LockupIndex, schedule: Schedule);
 
     fn convert_drafts(&mut self, draft_ids: Vec<DraftIndex>) -> Vec<LockupIndex>;
 }
@@ -88,6 +91,16 @@ impl SelfCallbacks for Contract {
         let event: FtLockupCreateLockup = (lockup_index, lockup, None).into();
         emit(EventKind::FtLockupCreateLockup(vec![event]));
         0.into()
+    }
+
+    #[private]
+    fn after_lockup_recall(&mut self, lockup_index: LockupIndex, schedule: Schedule) {
+        if is_promise_success() {
+            return;
+        }
+
+        let mut lockup = self.lockups.get(lockup_index as _).expect("Lockup not found");
+        lockup.schedule = schedule;
     }
 
     fn convert_drafts(&mut self, draft_ids: Vec<DraftIndex>) -> Vec<LockupIndex> {

@@ -12,52 +12,16 @@ use model::{
     view_api::{LockupViewApi, LockupViewApiIntegration},
     TimestampSec, WrappedBalance,
 };
-use near_sdk::{json_types::Base58CryptoHash, serde_json::json, AccountId, Timestamp};
+use near_sdk::{json_types::Base58CryptoHash, serde_json::json, AccountId};
 use near_workspaces::{result::ExecutionFinalResult, types::NearToken, Account, Contract};
 
 use crate::common::log_result;
 
-pub const LOCKUP_CONTRACT: &str = "hodl_lockup";
+pub const UTILS_CONTRACT: &str = "utils";
 
-pub struct LockupContract<'a> {
+pub struct UtilsContract<'a> {
     account: Option<Account>,
     contract: &'a Contract,
-}
-
-impl LockupContract<'_> {
-    pub(crate) async fn terminate_raw(
-        &mut self,
-        lockup_index: LockupIndex,
-        hashed_schedule: Option<Schedule>,
-        termination_timestamp: Option<TimestampSec>,
-    ) -> Result<ExecutionFinalResult> {
-        println!("▶️ terminate");
-
-        let result = self
-            .user_account()
-            .expect("User account is required")
-            .call(self.contract.id(), "terminate")
-            .args_json(json!({
-                "lockup_index": lockup_index,
-                "hashed_schedule": hashed_schedule,
-                "termination_timestamp": termination_timestamp
-            }))
-            .max_gas()
-            .deposit(NearToken::from_yoctonear(1))
-            .transact()
-            .await?;
-
-        log_result(result.clone());
-
-        Ok(result)
-    }
-
-    pub(crate) async fn block_timestamp_ms(&self) -> anyhow::Result<Timestamp> {
-        println!("▶️ block_timestamp_ms");
-        let result = self.contract.view("block_timestamp_ms").await?.json()?;
-        println!("   ✅ {:?}", result);
-        Ok(result)
-    }
 }
 
 #[async_trait]

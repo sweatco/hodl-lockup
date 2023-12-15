@@ -1,9 +1,9 @@
 use integration_trait::make_integration_version;
-use near_sdk::{AccountId, PromiseOrValue};
+use near_sdk::{assert_one_yocto, env, json_types::U128, AccountId, PromiseOrValue};
 
 use crate::{
     draft::{Draft, DraftGroupIndex, DraftIndex},
-    lockup::LockupIndex,
+    lockup::{Lockup, LockupIndex},
     schedule::Schedule,
     TimestampSec, WrappedBalance,
 };
@@ -46,4 +46,8 @@ pub trait LockupApi {
     fn discard_draft_group(&mut self, draft_group_id: DraftGroupIndex);
 
     fn delete_drafts(&mut self, draft_ids: Vec<DraftIndex>);
+
+    fn make_lockup_terminable(&mut self, beneficiary_id: AccountId, lockup_index: LockupIndex);
+
+    fn recall(&mut self, beneficiary_id: AccountId, lockup_index: LockupIndex) -> PromiseOrValue<()>;
 }

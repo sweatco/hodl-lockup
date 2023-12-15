@@ -6,11 +6,14 @@ use integration_utils::{integration_contract::IntegrationContract, misc::ToNear}
 use model::lockup_api::LockupApiIntegration;
 use multisig_integration::{Multisig, MULTISIG};
 use multisig_model::api::MultisigApiIntegration;
+use near_sdk::serde::de::Unexpected::Option;
 use near_workspaces::Account;
 use sweat_integration::{SweatFt, FT_CONTRACT};
-use sweat_model::SweatApiIntegration;
+use sweat_model::{StorageManagementIntegration, SweatApiIntegration};
 
 use crate::lockup_interface::{GetContractAccount, LockupContract, LOCKUP_CONTRACT};
+
+const UTILS_CONTRACT: &str = "utils";
 
 pub type Context = integration_utils::context::Context<near_workspaces::network::Sandbox>;
 
@@ -52,7 +55,11 @@ impl IntegrationContext for Context {
 }
 
 pub(crate) async fn prepare_contract() -> Result<Context> {
-    let mut context = Context::new(&[LOCKUP_CONTRACT, MULTISIG, FT_CONTRACT], "build-integration".into()).await?;
+    let mut context = Context::new(
+        &[LOCKUP_CONTRACT, MULTISIG, FT_CONTRACT, UTILS_CONTRACT],
+        "build-integration".into(),
+    )
+    .await?;
 
     let manager = context.manager().await?;
 
@@ -61,6 +68,9 @@ pub(crate) async fn prepare_contract() -> Result<Context> {
 
     context.multisig().new(0).await?;
 
+    // let holding_contract_init_result = context.utils().call("new").max_gas().transact().await?.into_result()?;
+    // println!("Initialized holding contract: {:?}", holding_contract_init_result);
+
     context
         .lockup()
         .new(
@@ -68,6 +78,17 @@ pub(crate) async fn prepare_contract() -> Result<Context> {
             vec![manager.to_near()],
             Some(vec![manager.to_near()]),
         )
+        .await?;
+
+    context
+        .ft_contract()
+        .with_user(&manager)
+        .storage_deposit(Some(context.lockup().contract().as_account().to_near()), None)
+        .await?;
+    context
+        .ft_contract()
+        .with_user(&manager)
+        .storage_deposit(Some(manager.to_near()), None)
         .await?;
 
     Ok(context)
