@@ -2,10 +2,10 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::Base58CryptoHash,
     serde::{Deserialize, Serialize},
-    AccountId, Balance, CryptoHash,
+    AccountId,
 };
 
-use crate::{lockup::Lockup, schedule::Schedule, TimestampSec};
+use crate::schedule::Schedule;
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]

@@ -32,6 +32,7 @@ pub struct Lockup {
     pub claimed_balance: Balance,
     /// An optional configuration that allows vesting/lockup termination.
     pub termination_config: Option<TerminationConfig>,
+    pub is_adjustable: bool,
 }
 
 impl Lockup {
@@ -41,6 +42,7 @@ impl Lockup {
             schedule: Schedule::new_unlocked_since(total_balance, timestamp),
             claimed_balance: 0,
             termination_config: None,
+            is_adjustable: false,
         }
     }
 
@@ -97,6 +99,7 @@ pub struct LockupCreate {
     pub account_id: AccountId,
     pub schedule: Schedule,
     pub vesting_schedule: Option<VestingConditions>,
+    pub is_adjustable: bool,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -106,6 +109,7 @@ impl LockupCreate {
             account_id,
             schedule: Schedule::new_unlocked(total_balance),
             vesting_schedule: None,
+            is_adjustable: false,
         }
     }
 }
@@ -121,6 +125,7 @@ impl LockupCreate {
                 beneficiary_id: payer_id.clone(),
                 vesting_schedule,
             }),
+            is_adjustable: self.is_adjustable,
         }
     }
 }
@@ -155,6 +160,7 @@ impl From<Lockup> for LockupView {
             schedule,
             claimed_balance,
             termination_config,
+            is_adjustable: _,
         } = lockup;
         Self {
             account_id,
@@ -194,6 +200,7 @@ impl From<LockupCreate> for LockupCreateView {
             account_id,
             schedule,
             vesting_schedule,
+            is_adjustable: _,
         } = lockup_create;
         Self {
             account_id,

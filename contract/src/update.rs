@@ -7,7 +7,7 @@ use crate::{Contract, ContractExt};
 impl UpdateApi for Contract {
     #[payable]
     fn update_contract(&mut self) -> PromiseOrValue<()> {
-        let Some(ref multisig) = self.miltisig else {
+        let Some(ref multisig) = self.multisig else {
             env::panic_str("Multisig account is not set. Operation is impossible");
         };
 
@@ -29,6 +29,6 @@ impl UpdateApi for Contract {
 
     #[private]
     fn set_multisig(&mut self, multisig: AccountId) {
-        self.miltisig = multisig.into();
+        self.multisig = multisig.into();
     }
 }

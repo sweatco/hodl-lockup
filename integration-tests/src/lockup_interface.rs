@@ -4,6 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use integration_utils::{integration_contract::IntegrationContract, misc::ToNear};
 use model::{
+    adjust_api::AdjustApiIntegration,
     draft::{Draft, DraftGroupIndex, DraftGroupView, DraftIndex, DraftView},
     lockup::{LockupIndex, LockupView},
     lockup_api::LockupApiIntegration,
@@ -235,16 +236,39 @@ impl LockupApiIntegration for LockupContract<'_> {
 
         Ok(())
     }
+}
 
-    async fn recall(&mut self, beneficiary_id: AccountId, lockup_index: LockupIndex) -> Result<()> {
+#[async_trait]
+impl AdjustApiIntegration for LockupContract<'_> {
+    async fn adjust(&mut self, beneficiary_id: AccountId, lockup_index: LockupIndex) -> Result<()> {
         println!("▶️ recall");
 
         let account = self.user_account().expect("User account is required");
         let result = account
-            .call(self.contract.id(), "recall")
+            .call(self.contract.id(), "adjust")
             .args_json(json!({
                 "beneficiary_id": beneficiary_id,
                 "lockup_index": lockup_index,
+            }))
+            .max_gas()
+            .deposit(NearToken::from_yoctonear(1))
+            .transact()
+            .await?;
+
+        log_result(result.clone());
+
+        Ok(())
+    }
+
+    async fn revoke(&mut self, beneficiary_id: AccountId, lockup_indices: Vec<LockupIndex>) -> Result<()> {
+        println!("▶️ revoke");
+
+        let account = self.user_account().expect("User account is required");
+        let result = account
+            .call(self.contract.id(), "revoke")
+            .args_json(json!({
+                "beneficiary_id": beneficiary_id,
+                "lockup_indices": lockup_indices,
             }))
             .max_gas()
             .deposit(NearToken::from_yoctonear(1))

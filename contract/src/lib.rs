@@ -1,8 +1,9 @@
 use std::convert::Into;
 
 use model::{
+    adjust_api::AdjustApi,
     draft::{Draft, DraftGroup, DraftGroupIndex, DraftIndex},
-    lockup::{Lockup, LockupIndex, LockupView},
+    lockup::{Lockup, LockupIndex},
     lockup_api::LockupApi,
     schedule::Schedule,
     util::current_timestamp_sec,
@@ -19,23 +20,13 @@ use near_sdk::{
     },
     collections::{LookupMap, UnorderedMap, UnorderedSet, Vector},
     env,
-    env::{log_str, panic_str},
+    env::panic_str,
     ext_contract, is_promise_success,
     json_types::{Base58CryptoHash, U128},
     log, near_bindgen,
-    serde::{Deserialize, Serialize},
+    serde::Serialize,
     serde_json, AccountId, BorshStorageKey, Gas, PanicOnDefault, Promise, PromiseOrValue,
 };
-
-pub mod callbacks;
-pub mod event;
-pub mod ft_token_receiver;
-pub mod internal;
-
-mod integration_test;
-mod termination;
-mod update;
-pub mod view;
 
 use crate::{
     callbacks::{ext_self, SelfCallbacks},
@@ -48,6 +39,18 @@ use crate::{
     serde_json::json,
     termination::TerminableLockup,
 };
+
+pub mod callbacks;
+pub mod event;
+pub mod ft_token_receiver;
+pub mod internal;
+
+mod adjust;
+mod integration_test;
+mod migration;
+mod termination;
+mod update;
+pub mod view;
 
 pub const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -83,7 +86,7 @@ pub struct Contract {
     pub next_draft_group_id: DraftGroupIndex,
     pub draft_groups: UnorderedMap<DraftGroupIndex, DraftGroup>,
 
-    pub miltisig: Option<AccountId>,
+    pub multisig: Option<AccountId>,
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
@@ -141,7 +144,7 @@ impl LockupApi for Contract {
             drafts: LookupMap::new(StorageKey::Drafts),
             next_draft_group_id: 0,
             draft_groups: UnorderedMap::new(StorageKey::DraftGroups),
-            miltisig: None,
+            multisig: None,
         }
     }
 
@@ -470,51 +473,6 @@ impl LockupApi for Contract {
         lockup.make_terminable(beneficiary_id);
 
         self.lockups.replace(lockup_index as _, &lockup);
-    }
-
-    #[payable]
-    fn recall(&mut self, beneficiary_id: AccountId, lockup_index: LockupIndex) -> PromiseOrValue<()> {
-        assert_one_yocto();
-        self.assert_deposit_whitelist(&env::predecessor_account_id());
-
-        let mut lockup = self.lockups.get(lockup_index as _).expect("Lockup not found");
-
-        let now = current_timestamp_sec();
-        let cliff_end = lockup.schedule.0.first().expect("Checkpoint is required").timestamp;
-
-        if now >= cliff_end {
-            panic_str("Cliff already ended");
-        }
-
-        let created_at = cliff_end - ONE_YEAR_SECONDS;
-        log_str(format!("@@ Now {now}, Created at {created_at}").as_str());
-        let percent = (now - created_at) as f64 / ONE_YEAR_SECONDS as f64;
-        log_str(format!("@@ Percent is {percent}").as_str());
-
-        let initial_schedule = lockup.schedule.clone();
-        for checkpoint in lockup.schedule.0.iter_mut() {
-            checkpoint.balance = (checkpoint.balance as f64 * percent) as _;
-        }
-        self.lockups.replace(lockup_index as _, &lockup);
-
-        let balance_to_refund = initial_schedule.total_balance() - lockup.schedule.total_balance();
-
-        if balance_to_refund > 0 {
-            Promise::new(self.token_account_id.clone())
-                .ft_transfer(
-                    &beneficiary_id.clone(),
-                    balance_to_refund,
-                    Some(format!("Recalled lockup #{lockup_index}")),
-                )
-                .then(
-                    ext_self::ext(env::current_account_id())
-                        .with_static_gas(GAS_FOR_AFTER_FT_TRANSFER)
-                        .after_lockup_recall(lockup_index, initial_schedule),
-                )
-                .into()
-        } else {
-            PromiseOrValue::Value(())
-        }
     }
 }
 

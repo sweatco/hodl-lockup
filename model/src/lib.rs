@@ -1,9 +1,11 @@
 use near_sdk::{json_types::U128, AccountId};
 
+pub mod adjust_api;
 pub mod draft;
 pub mod ft_token_receiver;
 pub mod lockup;
 pub mod lockup_api;
+pub mod migration;
 pub mod schedule;
 pub mod termination;
 pub mod update;
