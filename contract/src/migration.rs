@@ -1,14 +1,16 @@
+use near_sdk::{AccountId, collections::UnorderedSet, env, near_bindgen};
+
 use model::migration::OldState;
-use near_sdk::{collections::UnorderedSet, env, env::log_str, near_bindgen, AccountId};
 
 use crate::{Contract, ContractExt, StorageKey};
+use crate::event::{emit, EventKind, FtLockupUpdateContract};
 
 #[near_bindgen]
 impl Contract {
     #[private]
     #[init(ignore_state)]
     pub fn migrate(manager: AccountId) -> Self {
-        log_str("Migrate");
+        emit(EventKind::FtLockupUpdateContract(FtLockupUpdateContract {}));
 
         let old_state: OldState = env::state_read().expect("Failed to read old state");
 
