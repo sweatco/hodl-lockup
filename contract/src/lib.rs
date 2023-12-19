@@ -21,15 +21,17 @@ use near_sdk::{
     env, ext_contract, is_promise_success,
     json_types::{Base58CryptoHash, U128},
     log, near_bindgen,
-    serde::{Deserialize, Serialize},
+    serde::Serialize,
     serde_json, AccountId, BorshStorageKey, Gas, PanicOnDefault, Promise, PromiseOrValue,
 };
+use near_self_update::SelfUpdate;
 
 pub mod callbacks;
 pub mod event;
 pub mod ft_token_receiver;
 pub mod internal;
 
+mod migration;
 pub mod view;
 
 use crate::{
@@ -52,7 +54,7 @@ const GAS_EXT_CALL_COST: Gas = Gas(10_000_000_000_000);
 const GAS_MIN_FOR_CONVERT: Gas = Gas(15_000_000_000_000);
 
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault, SelfUpdate)]
 pub struct Contract {
     pub token_account_id: TokenAccountId,
 
@@ -74,6 +76,9 @@ pub struct Contract {
     pub drafts: LookupMap<DraftIndex, Draft>,
     pub next_draft_group_id: DraftGroupIndex,
     pub draft_groups: UnorderedMap<DraftGroupIndex, DraftGroup>,
+
+    /// The account ID authorized to perform sensitive operations on the contract.
+    pub manager: AccountId,
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
@@ -93,6 +98,7 @@ impl LockupApi for Contract {
         token_account_id: AccountId,
         deposit_whitelist: Vec<AccountId>,
         draft_operators_whitelist: Option<Vec<AccountId>>,
+        manager: AccountId,
     ) -> Self {
         let mut deposit_whitelist_set = UnorderedSet::new(StorageKey::DepositWhitelist);
         deposit_whitelist_set.extend(deposit_whitelist.clone().into_iter().map(Into::into));
@@ -131,6 +137,7 @@ impl LockupApi for Contract {
             drafts: LookupMap::new(StorageKey::Drafts),
             next_draft_group_id: 0,
             draft_groups: UnorderedMap::new(StorageKey::DraftGroups),
+            manager,
         }
     }
 
@@ -161,16 +168,15 @@ impl LockupApi for Contract {
         } else {
             let lockups_by_id: HashMap<LockupIndex, Lockup> =
                 self.internal_get_account_lockups(&account_id).into_iter().collect();
-            let amounts: HashMap<LockupIndex, WrappedBalance> =
-                lockups_by_id
-                    .iter()
-                    .map(|(lockup_id, lockup)| {
-                        let unlocked_balance = lockup.schedule.unlocked_balance(current_timestamp_sec());
-                        let amount: WrappedBalance = (unlocked_balance - lockup.claimed_balance).into();
+            let amounts: HashMap<LockupIndex, WrappedBalance> = lockups_by_id
+                .iter()
+                .map(|(lockup_id, lockup)| {
+                    let unlocked_balance = lockup.schedule.unlocked_balance(current_timestamp_sec());
+                    let amount: WrappedBalance = (unlocked_balance - lockup.claimed_balance).into();
 
-                        (*lockup_id, amount)
-                    })
-                    .collect();
+                    (*lockup_id, amount)
+                })
+                .collect();
             (amounts, lockups_by_id)
         };
 
@@ -412,7 +418,9 @@ impl LockupApi for Contract {
             self.draft_groups.insert(&draft_group_id as _, &draft_group);
         }
 
-        emit(EventKind::FtLockupDiscardDraftGroup(vec![FtLockupDiscardDraftGroup { id: draft_group_id }]));
+        emit(EventKind::FtLockupDiscardDraftGroup(vec![FtLockupDiscardDraftGroup {
+            id: draft_group_id,
+        }]));
     }
 
     fn delete_drafts(&mut self, draft_ids: Vec<DraftIndex>) {

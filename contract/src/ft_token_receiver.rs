@@ -1,26 +1,9 @@
-use model::{draft::DraftGroupIndex, lockup::LockupCreate};
+use model::ft_message::FtMessage;
 
 use crate::{
-    emit, env, log, near_bindgen, serde_json, AccountId, Contract, ContractExt, Deserialize, EventKind,
-    FtLockupCreateLockup, FtLockupFundDraftGroup, FungibleTokenReceiver, PromiseOrValue, Serialize, GAS_EXT_CALL_COST,
-    GAS_MIN_FOR_CONVERT, U128,
+    emit, env, log, near_bindgen, serde_json, AccountId, Contract, ContractExt, EventKind, FtLockupCreateLockup,
+    FtLockupFundDraftGroup, FungibleTokenReceiver, PromiseOrValue, GAS_EXT_CALL_COST, GAS_MIN_FOR_CONVERT, U128,
 };
-
-#[derive(Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct DraftGroupFunding {
-    pub draft_group_id: DraftGroupIndex,
-    // use remaining gas to try converting drafts
-    pub try_convert: Option<bool>,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-#[serde(untagged)]
-pub enum FtMessage {
-    LockupCreate(LockupCreate),
-    DraftGroupFunding(DraftGroupFunding),
-}
 
 #[near_bindgen]
 impl FungibleTokenReceiver for Contract {
@@ -30,6 +13,7 @@ impl FungibleTokenReceiver for Contract {
         self.assert_deposit_whitelist(&sender_id);
 
         let ft_message: FtMessage = serde_json::from_str(&msg).unwrap();
+
         match ft_message {
             FtMessage::LockupCreate(lockup_create) => {
                 let lockup = lockup_create.into_lockup(&sender_id);
@@ -70,11 +54,10 @@ impl FungibleTokenReceiver for Contract {
                         }
                     }
                 }
-                let event =
-                    FtLockupFundDraftGroup {
-                        id: draft_group_id,
-                        amount: amount.into(),
-                    };
+                let event = FtLockupFundDraftGroup {
+                    id: draft_group_id,
+                    amount: amount.into(),
+                };
                 emit(EventKind::FtLockupFundDraftGroup(vec![event]));
             }
         }

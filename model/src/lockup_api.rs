@@ -14,6 +14,7 @@ pub trait LockupApi {
         token_account_id: AccountId,
         deposit_whitelist: Vec<AccountId>,
         draft_operators_whitelist: Option<Vec<AccountId>>,
+        manager: AccountId,
     ) -> Self;
 
     fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> PromiseOrValue<WrappedBalance>;
