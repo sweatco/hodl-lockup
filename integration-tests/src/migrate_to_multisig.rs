@@ -30,7 +30,7 @@ async fn migrate_to_multisig() -> anyhow::Result<()> {
 
     dbg!(&lockups_number_before);
 
-    let wasm = load_wasm("../res/hodl_lockup_1.2.0.wasm")?;
+    let wasm = load_wasm("../res/hodl_lockup.wasm")?;
 
     let result = context.lockup().contract().as_account().deploy(&wasm).await?;
 
@@ -50,7 +50,7 @@ async fn migrate_to_multisig() -> anyhow::Result<()> {
 
     let lockups_number_after = context.lockup().get_num_lockups().call().await?;
 
-    assert_eq!("1.2.0", context.lockup().get_version().call().await?);
+    assert_eq!("1.1.0", context.lockup().get_version().call().await?);
 
     dbg!(&lockups_number_after);
 
@@ -84,7 +84,7 @@ async fn migrate_to_multisig() -> anyhow::Result<()> {
         .call()
         .await?;
 
-    let wasm = load_wasm("../res/hodl_lockup_1.3.0.wasm")?;
+    let wasm = load_wasm("../res/hodl_lockup_1.2.0.wasm")?;
 
     update_multisig_with_method_call(&mut context, &signers_accounts, &wasm).await?;
 
@@ -92,7 +92,7 @@ async fn migrate_to_multisig() -> anyhow::Result<()> {
 
     assert_eq!(lockups_number_before, lockups_number_after);
 
-    assert_eq!("1.3.0", context.lockup().get_version().call().await?);
+    assert_eq!("1.2.0", context.lockup().get_version().call().await?);
 
     Ok(())
 }
