@@ -30,31 +30,7 @@ async fn migrate_to_multisig() -> anyhow::Result<()> {
 
     dbg!(&lockups_number_before);
 
-    let wasm = load_wasm("../res/hodl_lockup.wasm")?;
-
-    let result = context.lockup().contract().as_account().deploy(&wasm).await?;
-
-    let res = result.into_result()?;
-
-    dbg!(&res);
-
-    let multisig_account_id = context.multisig().contract_account();
-
-    context
-        .lockup()
-        .make_call("migrate")
-        .args_json(json!({ "manager": multisig_account_id }))
-        .unwrap()
-        .call()
-        .await?;
-
-    let lockups_number_after = context.lockup().get_num_lockups().call().await?;
-
     assert_eq!("1.1.0", context.lockup().get_version().call().await?);
-
-    dbg!(&lockups_number_after);
-
-    assert_eq!(lockups_number_before, lockups_number_after);
 
     let signers = [
         SecretKey::from_random(KeyType::ED25519),
@@ -62,6 +38,7 @@ async fn migrate_to_multisig() -> anyhow::Result<()> {
         SecretKey::from_random(KeyType::ED25519),
     ];
 
+    let multisig_account_id = context.multisig().contract_account();
     let signers_accounts: Vec<_> = signers
         .iter()
         .map(|key| {
@@ -88,11 +65,12 @@ async fn migrate_to_multisig() -> anyhow::Result<()> {
 
     update_multisig_with_method_call(&mut context, &signers_accounts, &wasm).await?;
 
+    assert_eq!("1.2.0", context.lockup().get_version().call().await?);
+
     let lockups_number_after = context.lockup().get_num_lockups().call().await?;
+    dbg!(&lockups_number_after);
 
     assert_eq!(lockups_number_before, lockups_number_after);
-
-    assert_eq!("1.2.0", context.lockup().get_version().call().await?);
 
     Ok(())
 }

@@ -16,7 +16,7 @@ use sweat_model::{StorageManagementIntegration, SweatApiIntegration};
 
 use crate::lockup_interface::{GetContractAccount, LockupContract};
 
-pub const LOCKUP_CONTRACT: &str = "ft_lockup_original";
+pub const LOCKUP_CONTRACT: &str = "hodl_lockup";
 
 pub type Context = integration_utils::context::Context<near_workspaces::network::Sandbox>;
 
@@ -113,7 +113,7 @@ pub(crate) async fn prepare_contract() -> Result<Context> {
             context.ft_contract().contract_account(),
             vec![manager.to_near()],
             Some(vec![manager.to_near()]),
-            manager.to_near(),
+            context.multisig().contract().as_account().to_near(),
         )
         .call()
         .await?;

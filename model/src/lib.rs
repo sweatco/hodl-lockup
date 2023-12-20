@@ -4,7 +4,6 @@ pub mod draft;
 pub mod ft_message;
 pub mod lockup;
 pub mod lockup_api;
-pub mod migration;
 pub mod schedule;
 pub mod termination;
 pub mod update;
