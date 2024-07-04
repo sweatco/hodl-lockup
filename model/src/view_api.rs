@@ -1,5 +1,5 @@
-use integration_trait::make_integration_version;
 use near_sdk::{json_types::Base58CryptoHash, AccountId};
+use nitka::make_integration_version;
 
 use crate::{
     draft::{DraftGroupIndex, DraftGroupView, DraftIndex, DraftView},

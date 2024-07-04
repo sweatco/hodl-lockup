@@ -19,12 +19,9 @@ ed25519-dalek = { workspace = true }
 near-sdk = { workspace = true }
 near-workspaces = { workspace = true }
 
-model = { workspace = true }
-integration-utils = { workspace = true }
-helper-contract = { workspace = true }
+hodl-model = { workspace = true }
+nitka = { workspace = true }
 
 sweat-model = { workspace = true }
-sweat-integration = { workspace = true }
 
 multisig-model = { workspace = true }
-multisig-integration = { workspace = true }

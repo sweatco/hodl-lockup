@@ -1,4 +1,5 @@
-use model::ft_message::FtMessage;
+use hodl_model::ft_message::FtMessage;
+use near_sdk::Gas;
 
 use crate::{
     emit, env, log, near_bindgen, serde_json, AccountId, Contract, ContractExt, EventKind, FtLockupCreateLockup,
@@ -19,11 +20,7 @@ impl FungibleTokenReceiver for Contract {
                 let lockup = lockup_create.into_lockup(&sender_id);
                 lockup.assert_new_valid(amount);
                 let index = self.internal_add_lockup(&lockup);
-                log!(
-                    "Created new lockup for {} with index {}",
-                    lockup.account_id.as_ref(),
-                    index
-                );
+                log!("Created new lockup for {} with index {}", lockup.account_id, index);
                 let event: FtLockupCreateLockup = (index, lockup, None).into();
                 emit(EventKind::FtLockupCreateLockup(vec![event]));
             }
@@ -44,12 +41,12 @@ impl FungibleTokenReceiver for Contract {
                 if funding.try_convert.unwrap_or(false) {
                     // Using remaining gas to try convert drafts, not waiting for results
                     if let Some(remaining_gas) = env::prepaid_gas()
-                        .0
-                        .checked_sub((env::used_gas() + GAS_EXT_CALL_COST).into())
+                        .as_gas()
+                        .checked_sub(env::used_gas().as_gas() + GAS_EXT_CALL_COST.as_gas())
                     {
-                        if remaining_gas > GAS_MIN_FOR_CONVERT.into() {
+                        if remaining_gas > GAS_MIN_FOR_CONVERT.as_gas() {
                             crate::callbacks::ext_self::ext(env::current_account_id())
-                                .with_static_gas(remaining_gas.into())
+                                .with_static_gas(Gas::from_gas(remaining_gas))
                                 .convert_drafts(draft_group.draft_indices.into_iter().collect());
                         }
                     }

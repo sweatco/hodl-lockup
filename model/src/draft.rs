@@ -1,20 +1,22 @@
+use std::collections::HashSet;
+
 use near_sdk::{
-    borsh::{self, maybestd::collections::HashSet, BorshDeserialize, BorshSerialize},
-    env,
+    env, near,
     serde::{Deserialize, Serialize},
-    AccountId, Balance,
+    AccountId,
 };
 
 use crate::{
     lockup::{LockupCreate, LockupCreateView},
     util::u128_dec_format,
+    Balance,
 };
 
 pub type DraftGroupIndex = u32;
 pub type DraftIndex = u32;
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug, PartialEq, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Draft {
     pub draft_group_id: DraftGroupIndex,
     pub lockup_create: LockupCreate,
@@ -34,7 +36,8 @@ impl Draft {
     }
 }
 
-#[derive(Default, BorshDeserialize, BorshSerialize)]
+#[near(serializers=[borsh, json])]
+#[derive(Default)]
 pub struct DraftGroup {
     pub total_amount: Balance,
     pub payer_id: Option<AccountId>,
@@ -82,8 +85,7 @@ impl DraftGroup {
     }
 }
 
-#[derive(Serialize, Debug, PartialEq, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[borsh, json])]
 pub struct DraftGroupView {
     #[serde(with = "u128_dec_format")]
     pub total_amount: Balance,

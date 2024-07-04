@@ -13,6 +13,7 @@ pub mod view_api;
 pub type WrappedBalance = U128;
 pub type TimestampSec = u32;
 pub type TokenAccountId = AccountId;
+pub type Balance = u128;
 
 pub mod u256 {
     #![allow(clippy::doc_markdown)]

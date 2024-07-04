@@ -1,5 +1,5 @@
-use integration_trait::make_integration_version;
 use near_sdk::{AccountId, PromiseOrValue};
+use nitka::make_integration_version;
 
 use crate::{
     draft::{Draft, DraftGroupIndex, DraftIndex},

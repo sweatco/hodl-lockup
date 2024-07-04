@@ -1,6 +1,8 @@
-use model::lockup::{Lockup, LockupIndex};
+use std::collections::HashSet;
 
-use crate::{AccountId, Contract, HashSet};
+use hodl_model::lockup::{Lockup, LockupIndex};
+
+use crate::{AccountId, Contract};
 
 impl Contract {
     pub(crate) fn assert_deposit_whitelist(&self, account_id: &AccountId) {

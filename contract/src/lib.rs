@@ -1,6 +1,9 @@
-use std::convert::Into;
+use std::{
+    collections::{HashMap, HashSet},
+    convert::Into,
+};
 
-use model::{
+use hodl_model::{
     draft::{Draft, DraftGroup, DraftGroupIndex, DraftIndex},
     lockup::{Lockup, LockupIndex},
     lockup_api::LockupApi,
@@ -12,19 +15,14 @@ use model::{
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::{
     assert_one_yocto,
-    borsh::{
-        self,
-        maybestd::collections::{HashMap, HashSet},
-        BorshDeserialize, BorshSerialize,
-    },
     collections::{LookupMap, UnorderedMap, UnorderedSet, Vector},
     env, ext_contract, is_promise_success,
     json_types::{Base58CryptoHash, U128},
-    log, near_bindgen,
+    log, near, near_bindgen,
     serde::Serialize,
-    serde_json, AccountId, BorshStorageKey, Gas, PanicOnDefault, Promise, PromiseOrValue,
+    serde_json, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue,
 };
-use near_self_update::SelfUpdate;
+use near_self_update_proc::SelfUpdate;
 
 pub mod callbacks;
 pub mod event;
@@ -48,13 +46,13 @@ use crate::{
 pub const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const GAS_FOR_FT_TRANSFER: Gas = Gas(15_000_000_000_000);
-const GAS_FOR_AFTER_FT_TRANSFER: Gas = Gas(20_000_000_000_000);
-const GAS_EXT_CALL_COST: Gas = Gas(10_000_000_000_000);
-const GAS_MIN_FOR_CONVERT: Gas = Gas(15_000_000_000_000);
+const GAS_FOR_FT_TRANSFER: Gas = Gas::from_gas(15_000_000_000_000);
+const GAS_FOR_AFTER_FT_TRANSFER: Gas = Gas::from_gas(20_000_000_000_000);
+const GAS_EXT_CALL_COST: Gas = Gas::from_gas(10_000_000_000_000);
+const GAS_MIN_FOR_CONVERT: Gas = Gas::from_gas(15_000_000_000_000);
 
-#[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault, SelfUpdate)]
+#[near(contract_state)]
+#[derive(PanicOnDefault, SelfUpdate)]
 pub struct Contract {
     pub token_account_id: TokenAccountId,
 
@@ -81,7 +79,8 @@ pub struct Contract {
     pub manager: AccountId,
 }
 
-#[derive(BorshStorageKey, BorshSerialize)]
+#[near(serializers=[borsh, json])]
+#[derive(BorshStorageKey)]
 pub(crate) enum StorageKey {
     Lockups,
     AccountLockups,
@@ -89,6 +88,16 @@ pub(crate) enum StorageKey {
     DraftOperatorsWhitelist,
     Drafts,
     DraftGroups,
+}
+
+impl Contract {
+    fn assert_account_can_update(&self) {
+        assert_eq!(
+            env::predecessor_account_id(),
+            self.manager,
+            "Only the manager can update the code"
+        );
+    }
 }
 
 #[near_bindgen]
@@ -473,6 +482,11 @@ impl FtTransferPromise for Promise {
         }))
         .expect("Failed to serialize arguments");
 
-        self.function_call("ft_transfer".to_string(), args, 1, GAS_FOR_FT_TRANSFER)
+        self.function_call(
+            "ft_transfer".to_string(),
+            args,
+            NearToken::from_yoctonear(1),
+            GAS_FOR_FT_TRANSFER,
+        )
     }
 }

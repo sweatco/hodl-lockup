@@ -13,11 +13,11 @@ integration-test = []
 
 [dependencies]
 
-near-sdk = { workspace = true }
-near-self-update = { workspace = true }
+near-sdk = { workspace = true, features = ["unit-testing"] }
+near-self-update-proc = { workspace = true }
 near-contract-standards = { workspace = true }
 
-model = { workspace = true }
+hodl-model = { workspace = true }
 
 [dev-dependencies]
 fake = { workspace = true }

@@ -1,11 +1,11 @@
 [package]
-name = "model"
+name = "hodl-model"
 version = "1.0.0"
 publish = false
 edition = "2021"
 
 [lib]
-name = "model"
+name = "hodl_model"
 
 [dependencies]
 uint = { workspace = true }
@@ -14,7 +14,4 @@ async-trait = { workspace = true }
 
 near-sdk = { workspace = true }
 
-integration-trait = { workspace = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-integration-utils = { workspace = true }
+nitka = { workspace = true }

@@ -1,14 +1,9 @@
-use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-    env,
-    serde::{Deserialize, Serialize},
-    Balance, CryptoHash,
-};
+use near_sdk::{borsh::to_vec, env, near, CryptoHash};
 
-use crate::{u256::U256, util::u128_dec_format, TimestampSec};
+use crate::{u256::U256, util::u128_dec_format, Balance, TimestampSec};
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Checkpoint {
     /// The unix-timestamp in seconds since the epoch.
     pub timestamp: TimestampSec,
@@ -16,8 +11,8 @@ pub struct Checkpoint {
     pub balance: Balance,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Schedule(pub Vec<Checkpoint>);
 
 impl Schedule {
@@ -176,7 +171,7 @@ impl Schedule {
     }
 
     pub fn hash(&self) -> CryptoHash {
-        let value_hash = env::sha256(&self.try_to_vec().unwrap());
+        let value_hash = env::sha256(&to_vec(self).unwrap());
         let mut res = CryptoHash::default();
         res.copy_from_slice(&value_hash);
 

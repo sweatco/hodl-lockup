@@ -1,4 +1,6 @@
-use model::{
+use std::collections::HashMap;
+
+use hodl_model::{
     draft::{DraftGroup, DraftGroupIndex, DraftIndex},
     lockup::{Lockup, LockupClaim, LockupIndex},
     util::current_timestamp_sec,
@@ -7,7 +9,7 @@ use model::{
 
 use crate::{
     emit, ext_contract, is_promise_success, log, near_bindgen, AccountId, Contract, ContractExt, EventKind,
-    FtLockupClaimLockup, FtLockupCreateLockup, HashMap, Into,
+    FtLockupClaimLockup, FtLockupCreateLockup, Into,
 };
 
 #[ext_contract(ext_self)]
@@ -96,7 +98,7 @@ impl SelfCallbacks for Contract {
         let lockup_ids: Vec<LockupIndex> = draft_ids
             .iter()
             .map(|draft_id| {
-                let draft = self.drafts.remove(&draft_id as _).expect("draft not found");
+                let draft = self.drafts.remove(draft_id as _).expect("draft not found");
                 let draft_group = draft_group_lookup.entry(draft.draft_group_id).or_insert_with(|| {
                     self.draft_groups
                         .get(&draft.draft_group_id as _)
@@ -124,9 +126,9 @@ impl SelfCallbacks for Contract {
 
         for (draft_group_id, draft_group) in &draft_group_lookup {
             if draft_group.draft_indices.is_empty() {
-                self.draft_groups.remove(&draft_group_id as _);
+                self.draft_groups.remove(draft_group_id as _);
             } else {
-                self.draft_groups.insert(&draft_group_id as _, draft_group);
+                self.draft_groups.insert(draft_group_id as _, draft_group);
             }
         }
 

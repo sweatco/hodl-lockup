@@ -1,14 +1,14 @@
 use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
+    near,
     serde::{Deserialize, Serialize},
-    AccountId, Balance,
+    AccountId,
 };
 
 use crate::{
     schedule::Schedule,
     termination::{TerminationConfig, VestingConditions},
     util::{current_timestamp_sec, u128_dec_format},
-    TimestampSec, WrappedBalance,
+    Balance, TimestampSec, WrappedBalance,
 };
 
 pub type LockupIndex = u32;
@@ -21,8 +21,8 @@ pub struct LockupClaim {
     pub is_final: bool,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Debug, PartialEq, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Lockup {
     pub account_id: AccountId,
     pub schedule: Schedule,
@@ -91,8 +91,8 @@ impl Lockup {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize, Debug, PartialEq, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, PartialEq, Clone)]
 pub struct LockupCreate {
     pub account_id: AccountId,
     pub schedule: Schedule,

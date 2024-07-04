@@ -1,4 +1,4 @@
-use model::{
+use hodl_model::{
     draft::{DraftGroupIndex, DraftGroupView, DraftIndex, DraftView},
     lockup::{LockupIndex, LockupView},
     schedule::Schedule,
