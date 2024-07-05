@@ -23,6 +23,7 @@ use near_sdk::{
     serde_json, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue,
 };
 use near_self_update_proc::SelfUpdate;
+use hodl_model::lockup::LockupClaim;
 
 pub mod callbacks;
 pub mod event;
@@ -77,6 +78,8 @@ pub struct Contract {
 
     /// The account ID authorized to perform sensitive operations on the contract.
     pub manager: AccountId,
+    
+    pub orders: LookupMap<AccountId, Vec<LockupClaim>>,
 }
 
 #[near(serializers=[borsh, json])]
@@ -88,6 +91,7 @@ pub(crate) enum StorageKey {
     DraftOperatorsWhitelist,
     Drafts,
     DraftGroups,
+    Orders,
 }
 
 impl Contract {
@@ -147,10 +151,11 @@ impl LockupApi for Contract {
             next_draft_group_id: 0,
             draft_groups: UnorderedMap::new(StorageKey::DraftGroups),
             manager,
+            orders: LookupMap::new(StorageKey::Orders),
         }
     }
 
-    fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> PromiseOrValue<WrappedBalance> {
+    fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> PromiseOrValue<Vec<LockupClaim>> {
         let account_id = env::predecessor_account_id();
 
         let (claim_amounts, mut lockups_by_id) = if let Some(amounts) = amounts {
@@ -162,7 +167,7 @@ impl LockupApi for Contract {
                 .into_iter()
                 .map(|(lockup_id, amount)| {
                     (
-                        lockup_id,
+                        lockup_id, 
                         if let Some(amount) = amount {
                             amount
                         } else {
@@ -189,42 +194,40 @@ impl LockupApi for Contract {
             (amounts, lockups_by_id)
         };
 
-        let account_id = env::predecessor_account_id();
         let mut lockup_claims = vec![];
-        let mut total_claim_amount = 0;
         for (lockup_index, lockup_claim_amount) in claim_amounts {
             let lockup = lockups_by_id.get_mut(&lockup_index).unwrap();
             let lockup_claim = lockup.claim(lockup_index, lockup_claim_amount.0);
 
             if lockup_claim.claim_amount.0 > 0 {
-                log!("Claiming {} form lockup #{}", lockup_claim.claim_amount.0, lockup_index);
-                total_claim_amount += lockup_claim.claim_amount.0;
                 self.lockups.replace(u64::from(lockup_index), lockup);
                 lockup_claims.push(lockup_claim);
             }
         }
-        log!("Total claim {}", total_claim_amount);
+        
+        lockup_claims.into()
+        
 
-        if total_claim_amount > 0 {
-            Promise::new(self.token_account_id.clone())
-                .ft_transfer(
-                    &account_id,
-                    total_claim_amount,
-                    Some(format!(
-                        "Claiming unlocked {} balance from {}",
-                        total_claim_amount,
-                        env::current_account_id()
-                    )),
-                )
-                .then(
-                    ext_self::ext(env::current_account_id())
-                        .with_static_gas(GAS_FOR_AFTER_FT_TRANSFER)
-                        .after_ft_transfer(account_id, lockup_claims),
-                )
-                .into()
-        } else {
-            PromiseOrValue::Value(0.into())
-        }
+        // if total_claim_amount > 0 {
+        //     Promise::new(self.token_account_id.clone())
+        //         .ft_transfer(
+        //             &account_id,
+        //             total_claim_amount,
+        //             Some(format!(
+        //                 "Claiming unlocked {} balance from {}",
+        //                 total_claim_amount,
+        //                 env::current_account_id()
+        //             )),
+        //         )
+        //         .then(
+        //             ext_self::ext(env::current_account_id())
+        //                 .with_static_gas(GAS_FOR_AFTER_FT_TRANSFER)
+        //                 .after_ft_transfer(account_id, lockup_claims),
+        //         )
+        //         .into()
+        // } else {
+        //     PromiseOrValue::Value(0.into())
+        // }
     }
 
     #[payable]

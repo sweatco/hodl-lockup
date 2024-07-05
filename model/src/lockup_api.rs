@@ -7,6 +7,7 @@ use crate::{
     schedule::Schedule,
     TimestampSec, WrappedBalance,
 };
+use crate::lockup::LockupClaim;
 
 #[make_integration_version]
 pub trait LockupApi {
@@ -17,7 +18,7 @@ pub trait LockupApi {
         manager: AccountId,
     ) -> Self;
 
-    fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> PromiseOrValue<WrappedBalance>;
+    fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> PromiseOrValue<Vec<LockupClaim>>;
 
     fn terminate(
         &mut self,
