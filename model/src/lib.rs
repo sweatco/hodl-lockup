@@ -4,13 +4,12 @@ pub mod draft;
 pub mod ft_message;
 pub mod lockup;
 pub mod lockup_api;
+pub mod order;
 pub mod schedule;
 pub mod termination;
 pub mod update;
 pub mod util;
 pub mod view_api;
-pub mod order;
-
 pub type WrappedBalance = U128;
 pub type TimestampSec = u32;
 pub type TokenAccountId = AccountId;

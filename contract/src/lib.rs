@@ -5,7 +5,7 @@ use std::{
 
 use hodl_model::{
     draft::{Draft, DraftGroup, DraftGroupIndex, DraftIndex},
-    lockup::{Lockup, LockupIndex},
+    lockup::{Lockup, LockupClaim, LockupIndex},
     lockup_api::LockupApi,
     schedule::Schedule,
     util::current_timestamp_sec,
@@ -23,7 +23,6 @@ use near_sdk::{
     serde_json, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue,
 };
 use near_self_update_proc::SelfUpdate;
-use hodl_model::lockup::LockupClaim;
 
 pub mod callbacks;
 pub mod event;
@@ -31,6 +30,7 @@ pub mod ft_token_receiver;
 pub mod internal;
 
 mod migration;
+mod order;
 pub mod view;
 
 use crate::{
@@ -78,7 +78,7 @@ pub struct Contract {
 
     /// The account ID authorized to perform sensitive operations on the contract.
     pub manager: AccountId,
-    
+
     pub orders: LookupMap<AccountId, Vec<LockupClaim>>,
 }
 
@@ -155,7 +155,7 @@ impl LockupApi for Contract {
         }
     }
 
-    fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> PromiseOrValue<Vec<LockupClaim>> {
+    fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> Vec<LockupClaim> {
         let account_id = env::predecessor_account_id();
 
         let (claim_amounts, mut lockups_by_id) = if let Some(amounts) = amounts {
@@ -167,7 +167,7 @@ impl LockupApi for Contract {
                 .into_iter()
                 .map(|(lockup_id, amount)| {
                     (
-                        lockup_id, 
+                        lockup_id,
                         if let Some(amount) = amount {
                             amount
                         } else {
@@ -204,9 +204,8 @@ impl LockupApi for Contract {
                 lockup_claims.push(lockup_claim);
             }
         }
-        
-        lockup_claims.into()
-        
+
+        lockup_claims
 
         // if total_claim_amount > 0 {
         //     Promise::new(self.token_account_id.clone())
