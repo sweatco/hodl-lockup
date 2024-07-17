@@ -205,6 +205,8 @@ impl LockupApi for Contract {
             }
         }
 
+        // TODO: push claims to self.orders
+
         lockup_claims
 
         // if total_claim_amount > 0 {
