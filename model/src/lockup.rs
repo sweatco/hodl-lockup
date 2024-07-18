@@ -14,7 +14,7 @@ use crate::{
 pub type LockupIndex = u32;
 
 #[near(serializers=[borsh, json])]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct LockupClaim {
     pub index: LockupIndex,
     pub claim_amount: WrappedBalance,

@@ -16,7 +16,7 @@ impl OrderApi for Contract {
     }
 
     fn authorize(&mut self, account_ids: Vec<AccountId>, percentage: Option<f32>) -> PromiseOrValue<OrdersExecution> {
-        // TODO: add assert for caller id
+        self.assert_deposit_whitelist(&env::predecessor_account_id());
 
         let percentage = percentage.unwrap_or(1.0);
         assert!(
@@ -39,7 +39,7 @@ impl OrderApi for Contract {
             result.authorized.push(order);
             transfer_promise = match transfer_promise {
                 None => Some(self.do_transfer(account_id, total_approved)),
-                Some(promise) => Some(promise.then(self.do_transfer(account_id, total_approved))),
+                Some(promise) => Some(promise.and(self.do_transfer(account_id, total_approved))),
             };
         }
 
@@ -57,7 +57,7 @@ impl OrderApi for Contract {
     }
 
     fn buy(&mut self, account_ids: Vec<AccountId>, percentage: Option<f32>) -> Vec<OrderExecution> {
-        // TODO: add assert for caller id
+        self.assert_deposit_whitelist(&env::predecessor_account_id());
 
         let percentage = percentage.unwrap_or(1.0);
         assert!(

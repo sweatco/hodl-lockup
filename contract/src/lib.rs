@@ -194,6 +194,11 @@ impl LockupApi for Contract {
             (amounts, lockups_by_id)
         };
 
+        if !self.orders.contains_key(&account_id) {
+            self.orders.insert(&account_id, &vec![]);
+        }
+
+        let mut account_orders = self.orders.get(&account_id).unwrap();
         let mut lockup_claims = vec![];
         for (lockup_index, lockup_claim_amount) in claim_amounts {
             let lockup = lockups_by_id.get_mut(&lockup_index).unwrap();
@@ -201,34 +206,13 @@ impl LockupApi for Contract {
 
             if lockup_claim.claim_amount.0 > 0 {
                 self.lockups.replace(u64::from(lockup_index), lockup);
-                lockup_claims.push(lockup_claim);
+                lockup_claims.push(lockup_claim.clone());
+                account_orders.push(lockup_claim);
             }
         }
-
-        // TODO: push claims to self.orders
+        self.orders.insert(&account_id, &account_orders);
 
         lockup_claims
-
-        // if total_claim_amount > 0 {
-        //     Promise::new(self.token_account_id.clone())
-        //         .ft_transfer(
-        //             &account_id,
-        //             total_claim_amount,
-        //             Some(format!(
-        //                 "Claiming unlocked {} balance from {}",
-        //                 total_claim_amount,
-        //                 env::current_account_id()
-        //             )),
-        //         )
-        //         .then(
-        //             ext_self::ext(env::current_account_id())
-        //                 .with_static_gas(GAS_FOR_AFTER_FT_TRANSFER)
-        //                 .after_ft_transfer(account_id, lockup_claims),
-        //         )
-        //         .into()
-        // } else {
-        //     PromiseOrValue::Value(0.into())
-        // }
     }
 
     #[payable]
