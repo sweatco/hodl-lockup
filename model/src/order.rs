@@ -8,6 +8,7 @@ use crate::{
 };
 
 pub trait OrderApi {
+    fn reset_execution_status(&mut self);
     fn get_orders(&self, account_id: AccountId) -> Vec<LockupClaim>;
     fn authorize(&mut self, account_ids: Vec<AccountId>, percentage: Option<f32>) -> PromiseOrValue<OrdersExecution>;
     fn buy(&mut self, account_ids: Vec<AccountId>, percentage: Option<f32>) -> Vec<OrderExecution>;

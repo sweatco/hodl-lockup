@@ -80,6 +80,7 @@ pub struct Contract {
     pub manager: AccountId,
 
     pub orders: LookupMap<AccountId, Vec<LockupClaim>>,
+    pub is_executing: bool,
 }
 
 #[near(serializers=[borsh, json])]
@@ -152,10 +153,16 @@ impl LockupApi for Contract {
             draft_groups: UnorderedMap::new(StorageKey::DraftGroups),
             manager,
             orders: LookupMap::new(StorageKey::Orders),
+            is_executing: false,
         }
     }
 
     fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> Vec<LockupClaim> {
+        assert!(
+            !self.is_executing,
+            "Cannot place new order while other orders are being executed"
+        );
+
         let account_id = env::predecessor_account_id();
 
         let (claim_amounts, mut lockups_by_id) = if let Some(amounts) = amounts {
@@ -199,6 +206,12 @@ impl LockupApi for Contract {
         }
 
         let mut account_orders = self.orders.get(&account_id).unwrap();
+
+        let mut orders_index = HashMap::<LockupIndex, usize>::new();
+        for (index, order) in account_orders.iter().enumerate() {
+            orders_index.insert(order.index, index);
+        }
+
         let mut lockup_claims = vec![];
         for (lockup_index, lockup_claim_amount) in claim_amounts {
             let lockup = lockups_by_id.get_mut(&lockup_index).unwrap();
@@ -207,7 +220,13 @@ impl LockupApi for Contract {
             if lockup_claim.claim_amount.0 > 0 {
                 self.lockups.replace(u64::from(lockup_index), lockup);
                 lockup_claims.push(lockup_claim.clone());
-                account_orders.push(lockup_claim);
+
+                if let Some(i) = orders_index.get(&lockup_claim.index) {
+                    let order = account_orders.get_mut(*i).expect("Order not found");
+                    order.claim_amount.0 += lockup_claim.claim_amount.0;
+                } else {
+                    account_orders.push(lockup_claim);
+                }
             }
         }
         self.orders.insert(&account_id, &account_orders);

@@ -11,6 +11,11 @@ const GAS_FOR_AFTER_FT_TRANSFER: Gas = Gas::from_gas(20_000_000_000_000);
 
 #[near]
 impl OrderApi for Contract {
+    fn reset_execution_status(&mut self) {
+        self.assert_deposit_whitelist(&env::predecessor_account_id());
+        self.is_executing = false;
+    }
+
     fn get_orders(&self, account_id: AccountId) -> Vec<LockupClaim> {
         self.orders.get(&account_id).unwrap_or_default()
     }
@@ -38,12 +43,16 @@ impl OrderApi for Contract {
 
             result.authorized.push(order);
             transfer_promise = match transfer_promise {
-                None => Some(self.do_transfer(account_id, total_approved)),
-                Some(promise) => Some(promise.and(self.do_transfer(account_id, total_approved))),
+                None => Some(self.do_transfer(account_id.clone(), total_approved)),
+                Some(promise) => Some(promise.and(self.do_transfer(account_id.clone(), total_approved))),
             };
+
+            self.orders.remove(&account_id);
         }
 
         if let Some(promise) = transfer_promise {
+            self.is_executing = true;
+
             promise
                 .then(
                     oder_callback::ext(env::current_account_id())
@@ -81,6 +90,7 @@ impl OrderApi for Contract {
                 }
 
                 order_execution.add(order.index, approved_amount, refund_amount);
+                self.orders.remove(&account_id);
             }
 
             result.push(order_execution);
@@ -131,6 +141,8 @@ trait OrderCallback {
 impl OrderCallback for Contract {
     #[private]
     fn on_orders_executed(&mut self, orders: OrdersExecution) -> PromiseOrValue<OrdersExecution> {
+        self.is_executing = false;
+
         for (index, order) in orders.authorized.iter().enumerate() {
             let result = env::promise_result(index as _);
 
