@@ -5,9 +5,9 @@ use hodl_model::{
 };
 use near_sdk::{env, ext_contract, near, AccountId, Gas, Promise, PromiseOrValue, PromiseResult};
 
-use crate::{Contract, ContractExt, FtTransferPromise};
+use crate::{internal::assert_enough_gas, Contract, ContractExt, FtTransferPromise, GAS_FOR_FT_TRANSFER};
 
-const GAS_FOR_AFTER_FT_TRANSFER: Gas = Gas::from_gas(20_000_000_000_000);
+const GAS_FOR_AFTER_FT_TRANSFER: Gas = Gas::from_tgas(50);
 
 #[near]
 impl OrderApi for Contract {
@@ -51,6 +51,14 @@ impl OrderApi for Contract {
         }
 
         if let Some(promise) = transfer_promise {
+            assert_enough_gas(
+                GAS_FOR_FT_TRANSFER
+                    .checked_mul(result.authorized.len() as _)
+                    .unwrap()
+                    .checked_add(GAS_FOR_AFTER_FT_TRANSFER)
+                    .unwrap(),
+            );
+
             self.is_executing = true;
 
             promise
