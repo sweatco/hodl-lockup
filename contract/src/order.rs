@@ -1,6 +1,7 @@
 use hodl_model::{
     lockup::{LockupClaim, LockupIndex},
-    order::{OrderApi, OrderExecution, OrdersExecution},
+    order::{OrderApi, OrderExecution, OrdersExecutionResult},
+    view_api::LockupViewApi,
     Balance,
 };
 use near_sdk::{env, ext_contract, near, AccountId, Gas, Promise, PromiseOrValue, PromiseResult};
@@ -20,7 +21,11 @@ impl OrderApi for Contract {
         self.orders.get(&account_id).unwrap_or_default()
     }
 
-    fn authorize(&mut self, account_ids: Vec<AccountId>, percentage: Option<f32>) -> PromiseOrValue<OrdersExecution> {
+    fn authorize(
+        &mut self,
+        account_ids: Vec<AccountId>,
+        percentage: Option<f32>,
+    ) -> PromiseOrValue<OrdersExecutionResult> {
         self.assert_deposit_whitelist(&env::predecessor_account_id());
 
         let percentage = percentage.unwrap_or(1.0);
@@ -29,19 +34,14 @@ impl OrderApi for Contract {
             "Percentage is out of range [0.0 .. 1.0]"
         );
 
-        let mut transfer_promise: Option<Promise> = Option::None;
-        let mut result = OrdersExecution::default();
+        let mut transfer_promise: Option<Promise> = None;
+        let mut orders = Vec::<OrderExecution>::new();
 
         for account_id in account_ids {
             let order = self.authorize_order(account_id.clone(), percentage);
             let total_approved = order.total_approved;
 
-            if total_approved == 0 {
-                result.declined.push(order);
-                continue;
-            }
-
-            result.authorized.push(order);
+            orders.push(order);
             transfer_promise = match transfer_promise {
                 None => Some(self.do_transfer(account_id.clone(), total_approved)),
                 Some(promise) => Some(promise.and(self.do_transfer(account_id.clone(), total_approved))),
@@ -53,7 +53,7 @@ impl OrderApi for Contract {
         if let Some(promise) = transfer_promise {
             assert_enough_gas(
                 GAS_FOR_FT_TRANSFER
-                    .checked_mul(result.authorized.len() as _)
+                    .checked_mul(orders.len() as _)
                     .unwrap()
                     .checked_add(GAS_FOR_AFTER_FT_TRANSFER)
                     .unwrap(),
@@ -65,11 +65,11 @@ impl OrderApi for Contract {
                 .then(
                     oder_callback::ext(env::current_account_id())
                         .with_static_gas(GAS_FOR_AFTER_FT_TRANSFER)
-                        .on_orders_executed(result),
+                        .on_orders_executed(orders),
                 )
                 .into()
         } else {
-            PromiseOrValue::Value(result)
+            PromiseOrValue::Value(OrdersExecutionResult::default())
         }
     }
 
@@ -85,7 +85,7 @@ impl OrderApi for Contract {
         let mut result = Vec::<OrderExecution>::new();
 
         for account_id in account_ids {
-            let mut order_execution = OrderExecution::empty(account_id.clone());
+            let mut order_execution = OrderExecution::new(account_id.clone());
 
             let account_orders = self.orders.get(&account_id).expect("Account not found");
             for order in account_orders {
@@ -111,7 +111,7 @@ impl OrderApi for Contract {
 
 impl Contract {
     fn authorize_order(&mut self, account_id: AccountId, percentage: f32) -> OrderExecution {
-        let mut order_execution = OrderExecution::empty(account_id.clone());
+        let mut order_execution = OrderExecution::new(account_id.clone());
 
         let account_orders = self.orders.get(&account_id).expect("Account not found");
         for order in account_orders {
@@ -142,30 +142,52 @@ impl Contract {
 
 #[ext_contract(oder_callback)]
 trait OrderCallback {
-    fn on_orders_executed(&mut self, orders: OrdersExecution) -> PromiseOrValue<OrdersExecution>;
+    fn on_orders_executed(&mut self, orders: Vec<OrderExecution>) -> PromiseOrValue<OrdersExecutionResult>;
 }
 
 #[near]
 impl OrderCallback for Contract {
     #[private]
-    fn on_orders_executed(&mut self, orders: OrdersExecution) -> PromiseOrValue<OrdersExecution> {
+    fn on_orders_executed(&mut self, orders: Vec<OrderExecution>) -> PromiseOrValue<OrdersExecutionResult> {
         self.is_executing = false;
 
-        for (index, order) in orders.authorized.iter().enumerate() {
-            let result = env::promise_result(index as _);
+        let mut execution_result = OrdersExecutionResult::default();
+        for (index, order) in orders.iter().enumerate() {
+            let tx_result = env::promise_result(index as _);
 
-            if result == PromiseResult::Failed {
+            if tx_result == PromiseResult::Failed {
                 self.refund_order(order.clone());
+                execution_result.rejected.push(order.account_id.clone());
+            } else {
+                execution_result
+                    .approved
+                    .insert(order.account_id.clone(), order.total_approved);
             }
+
+            // region cleanup
+            let mut account_lockup_indices = self
+                .account_lockups
+                .get(&order.account_id)
+                .expect("Cannot find lockups for account");
+
+            for index in order.details.keys() {
+                let lockup = self.lockups.get(*index as _).expect("Cannot find lockup");
+                if lockup.claimed_balance == lockup.schedule.total_balance() {
+                    account_lockup_indices.remove(index);
+                }
+            }
+
+            self.internal_save_account_lockups(&order.account_id, account_lockup_indices);
+            // endregion
         }
 
-        PromiseOrValue::Value(orders)
+        PromiseOrValue::Value(execution_result)
     }
 }
 
 impl Contract {
     fn refund_order(&mut self, order: OrderExecution) {
-        for (index, (amount, _)) in order.results {
+        for (index, (amount, _)) in order.details {
             self.refund(index, amount);
         }
     }
