@@ -4,7 +4,7 @@ use hodl_model::{
     view_api::LockupViewApi,
     Balance,
 };
-use near_sdk::{env, ext_contract, near, AccountId, Gas, Promise, PromiseOrValue, PromiseResult};
+use near_sdk::{env, ext_contract, near, require, AccountId, Gas, Promise, PromiseOrValue, PromiseResult};
 
 use crate::{internal::assert_enough_gas, Contract, ContractExt, FtTransferPromise, GAS_FOR_FT_TRANSFER};
 
@@ -29,7 +29,7 @@ impl OrderApi for Contract {
         self.assert_deposit_whitelist(&env::predecessor_account_id());
 
         let percentage = percentage.unwrap_or(1.0);
-        assert!(
+        require!(
             (0.0..=1.0).contains(&percentage),
             "Percentage is out of range [0.0 .. 1.0]"
         );
@@ -77,7 +77,7 @@ impl OrderApi for Contract {
         self.assert_deposit_whitelist(&env::predecessor_account_id());
 
         let percentage = percentage.unwrap_or(1.0);
-        assert!(
+        require!(
             (0.0..=1.0).contains(&percentage),
             "Percentage is out of range [0.0 .. 1.0]"
         );
@@ -106,6 +106,28 @@ impl OrderApi for Contract {
         }
 
         result
+    }
+
+    fn revoke(&mut self, index: LockupIndex) {
+        require!(
+            !self.is_executing,
+            "Cannot revoke an order while other orders are being executed"
+        );
+
+        let account_id = env::predecessor_account_id();
+        let mut orders = self.orders.get(&account_id).expect("Account orders not found");
+
+        let index = orders
+            .iter()
+            .position(|order| order.index == index)
+            .expect("No order for this lockup");
+        let order = orders.remove(index);
+
+        self.orders.insert(&account_id, &orders);
+
+        let mut lockup = self.lockups.get(index as _).expect("Lockup not found");
+        lockup.claimed_balance -= order.claim_amount.0;
+        self.lockups.replace(index as _, &lockup);
     }
 }
 

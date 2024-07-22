@@ -16,6 +16,7 @@ pub trait OrderApi {
         percentage: Option<f32>,
     ) -> PromiseOrValue<OrdersExecutionResult>;
     fn buy(&mut self, account_ids: Vec<AccountId>, percentage: Option<f32>) -> Vec<OrderExecution>;
+    fn revoke(&mut self, index: LockupIndex);
 }
 
 #[near(serializers=[json])]

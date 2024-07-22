@@ -18,7 +18,7 @@ use near_sdk::{
     collections::{LookupMap, UnorderedMap, UnorderedSet, Vector},
     env, ext_contract, is_promise_success,
     json_types::{Base58CryptoHash, U128},
-    log, near, near_bindgen,
+    log, near, near_bindgen, require,
     serde::Serialize,
     serde_json, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue,
 };
@@ -158,7 +158,7 @@ impl LockupApi for Contract {
     }
 
     fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> Vec<LockupClaim> {
-        assert!(
+        require!(
             !self.is_executing,
             "Cannot place new order while other orders are being executed"
         );
