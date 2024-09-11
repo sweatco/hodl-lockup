@@ -117,11 +117,11 @@ impl OrderApi for Contract {
         let account_id = env::predecessor_account_id();
         let mut orders = self.orders.get(&account_id).expect("Account orders not found");
 
-        let index = orders
+        let order_index = orders
             .iter()
             .position(|order| order.index == index)
             .expect("No order for this lockup");
-        let order = orders.remove(index);
+        let order = orders.remove(order_index);
 
         self.orders.insert(&account_id, &orders);
 
