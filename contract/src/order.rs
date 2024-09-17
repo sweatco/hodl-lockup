@@ -1,7 +1,6 @@
 use hodl_model::{
     lockup::{LockupClaim, LockupIndex},
     order::{OrderApi, OrderExecution, OrdersExecutionResult},
-    view_api::LockupViewApi,
     Balance,
 };
 use near_sdk::{env, ext_contract, near, require, AccountId, Gas, Promise, PromiseOrValue, PromiseResult};
@@ -28,7 +27,7 @@ impl OrderApi for Contract {
     ) -> PromiseOrValue<OrdersExecutionResult> {
         self.assert_deposit_whitelist(&env::predecessor_account_id());
 
-        let percentage = percentage.unwrap_or(1.0);
+        let percentage = percentage.unwrap_or(1.0) as f64;
         require!(
             (0.0..=1.0).contains(&percentage),
             "Percentage is out of range [0.0 .. 1.0]"
@@ -38,10 +37,10 @@ impl OrderApi for Contract {
         let mut orders = Vec::<OrderExecution>::new();
 
         for account_id in account_ids {
-            let order = self.authorize_order(account_id.clone(), percentage);
-            let total_approved = order.total_approved;
+            let order_execution = self.execute_order(account_id.clone(), percentage);
+            let total_approved = order_execution.total_approved;
 
-            orders.push(order);
+            orders.push(order_execution);
             transfer_promise = match transfer_promise {
                 None => Some(self.do_transfer(account_id.clone(), total_approved)),
                 Some(promise) => Some(promise.and(self.do_transfer(account_id.clone(), total_approved))),
@@ -76,7 +75,7 @@ impl OrderApi for Contract {
     fn buy(&mut self, account_ids: Vec<AccountId>, percentage: Option<f32>) -> Vec<OrderExecution> {
         self.assert_deposit_whitelist(&env::predecessor_account_id());
 
-        let percentage = percentage.unwrap_or(1.0);
+        let percentage = percentage.unwrap_or(1.0) as f64;
         require!(
             (0.0..=1.0).contains(&percentage),
             "Percentage is out of range [0.0 .. 1.0]"
@@ -85,21 +84,7 @@ impl OrderApi for Contract {
         let mut result = Vec::<OrderExecution>::new();
 
         for account_id in account_ids {
-            let mut order_execution = OrderExecution::new(account_id.clone());
-
-            let account_orders = self.orders.get(&account_id).expect("Account not found");
-            for order in account_orders {
-                let requested_amount = order.claim_amount.0;
-                let approved_amount = (requested_amount as f32 * percentage) as u128;
-                let refund_amount = requested_amount - approved_amount;
-
-                if approved_amount > requested_amount {
-                    self.refund(order.index, refund_amount);
-                }
-
-                order_execution.add(order.index, approved_amount, refund_amount);
-                self.orders.remove(&account_id);
-            }
+            let order_execution = self.execute_order(account_id.clone(), percentage);
 
             result.push(order_execution);
             self.orders.remove(&account_id).expect("Couldn't delete orders");
@@ -132,13 +117,13 @@ impl OrderApi for Contract {
 }
 
 impl Contract {
-    fn authorize_order(&mut self, account_id: AccountId, percentage: f32) -> OrderExecution {
+    fn execute_order(&mut self, account_id: AccountId, percentage: f64) -> OrderExecution {
         let mut order_execution = OrderExecution::new(account_id.clone());
 
         let account_orders = self.orders.get(&account_id).expect("Account not found");
         for order in account_orders {
             let requested_amount = order.claim_amount.0;
-            let approved_amount = (requested_amount as f32 * percentage) as u128;
+            let approved_amount = (requested_amount as f64 * percentage) as u128;
             let refund_amount = requested_amount - approved_amount;
 
             if approved_amount > requested_amount {
