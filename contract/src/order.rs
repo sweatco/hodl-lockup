@@ -23,15 +23,11 @@ impl OrderApi for Contract {
     fn authorize(
         &mut self,
         account_ids: Vec<AccountId>,
-        percentage: Option<f32>,
+        percentage: Option<u32>,
     ) -> PromiseOrValue<OrdersExecutionResult> {
         self.assert_deposit_whitelist(&env::predecessor_account_id());
 
-        let percentage = percentage.unwrap_or(1.0) as f64;
-        require!(
-            (0.0..=1.0).contains(&percentage),
-            "Percentage is out of range [0.0 .. 1.0]"
-        );
+        let percentage = unwrap_percentage(percentage);
 
         let mut transfer_promise: Option<Promise> = None;
         let mut orders = Vec::<OrderExecution>::new();
@@ -72,14 +68,10 @@ impl OrderApi for Contract {
         }
     }
 
-    fn buy(&mut self, account_ids: Vec<AccountId>, percentage: Option<f32>) -> Vec<OrderExecution> {
+    fn buy(&mut self, account_ids: Vec<AccountId>, percentage: Option<u32>) -> Vec<OrderExecution> {
         self.assert_deposit_whitelist(&env::predecessor_account_id());
 
-        let percentage = percentage.unwrap_or(1.0) as f64;
-        require!(
-            (0.0..=1.0).contains(&percentage),
-            "Percentage is out of range [0.0 .. 1.0]"
-        );
+        let percentage = unwrap_percentage(percentage);
 
         let mut result = Vec::<OrderExecution>::new();
 
@@ -110,20 +102,37 @@ impl OrderApi for Contract {
 
         self.orders.insert(&account_id, &orders);
 
-        let mut lockup = self.lockups.get(index as _).expect("Lockup not found");
+        let mut lockup = self.lockups.get(u64::from(index)).expect("Lockup not found");
         lockup.claimed_balance -= order.claim_amount.0;
-        self.lockups.replace(index as _, &lockup);
+        self.lockups.replace(u64::from(index), &lockup);
     }
 }
 
+fn unwrap_percentage(percentage: Option<u32>) -> u32 {
+    let percentage = percentage.unwrap_or(10000);
+    require!(
+        (0..=10000).contains(&percentage),
+        "Percentage is out of range [0 .. 10000]"
+    );
+    percentage
+}
+
+fn calculate_percentage(value: u128, percentage: u32) -> u128 {
+    value
+        .checked_mul(percentage as u128)
+        .expect("Failed to multiply")
+        .checked_div(10000)
+        .expect("Failed to divide")
+}
+
 impl Contract {
-    fn execute_order(&mut self, account_id: AccountId, percentage: f64) -> OrderExecution {
+    fn execute_order(&mut self, account_id: AccountId, percentage: u32) -> OrderExecution {
         let mut order_execution = OrderExecution::new(account_id.clone());
 
         let account_orders = self.orders.get(&account_id).expect("Account not found");
         for order in account_orders {
             let requested_amount = order.claim_amount.0;
-            let approved_amount = (requested_amount as f64 * percentage) as u128;
+            let approved_amount = calculate_percentage(requested_amount, percentage);
             let refund_amount = requested_amount - approved_amount;
 
             if approved_amount > requested_amount {
@@ -142,12 +151,13 @@ impl Contract {
         Promise::new(self.token_account_id.clone()).ft_transfer(
             &receiver_id,
             amount,
-            Some(format!("Authorize claimed {} balance from {}", amount, receiver_id)),
+            Some(format!("Authorize claimed {amount} balance from {receiver_id}")),
         )
     }
 }
 
 #[ext_contract(oder_callback)]
+#[allow(dead_code)] // false positive
 trait OrderCallback {
     fn on_orders_executed(&mut self, orders: Vec<OrderExecution>) -> PromiseOrValue<OrdersExecutionResult>;
 }
@@ -178,7 +188,7 @@ impl OrderCallback for Contract {
                 .expect("Cannot find lockups for account");
 
             for index in order.details.keys() {
-                let lockup = self.lockups.get(*index as _).expect("Cannot find lockup");
+                let lockup = self.lockups.get(u64::from(*index)).expect("Cannot find lockup");
                 if lockup.claimed_balance == lockup.schedule.total_balance() {
                     account_lockup_indices.remove(index);
                 }
@@ -200,8 +210,8 @@ impl Contract {
     }
 
     fn refund(&mut self, index: LockupIndex, amount: Balance) {
-        let mut lockup = self.lockups.get(index as _).expect("Lockup not found");
+        let mut lockup = self.lockups.get(u64::from(index)).expect("Lockup not found");
         lockup.claimed_balance -= amount;
-        self.lockups.replace(index as _, &lockup);
+        self.lockups.replace(u64::from(index), &lockup);
     }
 }

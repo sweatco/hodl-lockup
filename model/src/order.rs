@@ -10,12 +10,14 @@ use crate::{
 pub trait OrderApi {
     fn reset_execution_status(&mut self);
     fn get_orders(&self, account_id: AccountId) -> Vec<LockupClaim>;
+    /// `percentage` is given with 2 decimal places (e.g., 1550 for 15.50%)
     fn authorize(
         &mut self,
         account_ids: Vec<AccountId>,
-        percentage: Option<f32>,
+        percentage: Option<u32>,
     ) -> PromiseOrValue<OrdersExecutionResult>;
-    fn buy(&mut self, account_ids: Vec<AccountId>, percentage: Option<f32>) -> Vec<OrderExecution>;
+    /// `percentage` is given with 2 decimal places (e.g., 1550 for 15.50%)
+    fn buy(&mut self, account_ids: Vec<AccountId>, percentage: Option<u32>) -> Vec<OrderExecution>;
     fn revoke(&mut self, index: LockupIndex);
 }
 
