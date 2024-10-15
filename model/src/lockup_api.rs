@@ -3,7 +3,7 @@ use nitka::make_integration_version;
 
 use crate::{
     draft::{Draft, DraftGroupIndex, DraftIndex},
-    lockup::LockupIndex,
+    lockup::{LockupClaim, LockupIndex},
     schedule::Schedule,
     TimestampSec, WrappedBalance,
 };
@@ -17,7 +17,7 @@ pub trait LockupApi {
         manager: AccountId,
     ) -> Self;
 
-    fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> PromiseOrValue<WrappedBalance>;
+    fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> Vec<LockupClaim>;
 
     fn terminate(
         &mut self,
