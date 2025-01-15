@@ -1,15 +1,12 @@
 #![cfg(test)]
 
 use anyhow::Result;
-use integration_utils::misc::ToNear;
-use model::{ft_message::FtMessage, lockup::LockupCreate, schedule::Schedule, view_api::LockupViewApiIntegration};
-use near_sdk::serde_json::to_string;
+use hodl_model::{api::LockupViewApiIntegration, ft_message::FtMessage, lockup::LockupCreate, schedule::Schedule};
+use near_sdk::{serde_json::to_string, NearToken};
+use nitka::misc::ToNear;
 use sweat_model::{FungibleTokenCoreIntegration, StorageManagementIntegration, SweatApiIntegration};
 
-use crate::{
-    context::{prepare_contract, Context, IntegrationContext},
-    lockup_interface::GetContractAccount,
-};
+use crate::context::{prepare_contract, Context, IntegrationContext};
 
 #[tokio::test]
 async fn migration() -> Result<()> {
@@ -17,7 +14,7 @@ async fn migration() -> Result<()> {
 
     create_lockups(&mut context).await?;
 
-    dbg!(context.lockup().get_num_lockups().call().await?);
+    dbg!(context.lockup().get_num_lockups().await?);
 
     Ok(())
 }
@@ -28,7 +25,6 @@ async fn create_lockups(context: &mut Context) -> Result<()> {
     context
         .ft_contract()
         .tge_mint(&manager.to_near(), 1_000_000_000.into())
-        .call()
         .await?;
 
     for i in 0..20 {
@@ -37,7 +33,6 @@ async fn create_lockups(context: &mut Context) -> Result<()> {
         context
             .ft_contract()
             .storage_deposit(account.to_near().into(), None)
-            .call()
             .await?;
 
         let message = FtMessage::LockupCreate(LockupCreate {
@@ -49,13 +44,13 @@ async fn create_lockups(context: &mut Context) -> Result<()> {
         context
             .ft_contract()
             .ft_transfer_call(
-                context.lockup().contract_account(),
+                context.lockup().contract.id().clone(),
                 100.into(),
                 None,
                 to_string(&message).unwrap(),
             )
+            .deposit(NearToken::from_yoctonear(1))
             .with_user(&manager)
-            .call()
             .await?;
     }
 

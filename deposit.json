@@ -1,0 +1,5 @@
+{
+  "receiver_id": "ajar-space.testnet",
+  "amount": "1000000000",
+  "msg": "{\"account_id\": \"bob.pimp.testnet\",\"schedule\": [{\"timestamp\": 1721236342,\"balance\": \"0\"},{\"timestamp\": 1752771325,\"balance\": \"1000000000\"}]}"
+}

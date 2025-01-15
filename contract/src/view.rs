@@ -1,8 +1,8 @@
 use hodl_model::{
+    api::LockupViewApi,
     draft::{DraftGroupIndex, DraftGroupView, DraftIndex, DraftView},
     lockup::{LockupIndex, LockupView},
     schedule::Schedule,
-    view_api::LockupViewApi,
     WrappedBalance,
 };
 

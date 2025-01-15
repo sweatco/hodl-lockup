@@ -8,10 +8,8 @@ members = ["model", "contract", "integration-tests"]
 [workspace.dependencies]
 anyhow = "1.0.75"
 async-trait = "0.1.73"
-fake = "2.8.0"
+fake = "3.1.0"
 rand = "0.8.5"
-futures = "0.3.28"
-itertools = "0.13.0"
 base64 = "0.22.1"
 sha256 = "1.3.0"
 tokio = { version = "1.28" }
@@ -26,6 +24,7 @@ near-sdk = "5.1.0"
 near-contract-standards = "5.1.0"
 
 nitka = "0.5.0"
+nitka-proc = "0.5.0"
 sweat-model = { git = "https://github.com/sweatco/sweat-near", rev = "96ca9d4a09ff1eb378bff1e6ca7ccd2cc2cf1b6e" }
 
 multisig-model = { git = "https://github.com/sweatco/multisig", rev = "0dbc4599db26d3f1b2dcddbd0d0cf5297663e0ef" }

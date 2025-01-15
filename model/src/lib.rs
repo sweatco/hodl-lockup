@@ -1,15 +1,17 @@
 use near_sdk::{json_types::U128, AccountId};
 
+pub mod api;
 pub mod draft;
 pub mod ft_message;
 pub mod lockup;
-pub mod lockup_api;
 pub mod order;
 pub mod schedule;
 pub mod termination;
-pub mod update;
 pub mod util;
-pub mod view_api;
+
+pub const ONE_DAY_SEC: TimestampSec = 24 * 60 * 60;
+pub const ONE_YEAR_SEC: TimestampSec = 365 * ONE_DAY_SEC;
+
 pub type WrappedBalance = U128;
 pub type TimestampSec = u32;
 pub type TokenAccountId = AccountId;
