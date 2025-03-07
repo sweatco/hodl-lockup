@@ -1,14 +1,13 @@
-use near_sdk::{borsh::to_vec, env, near, CryptoHash};
+use near_sdk::{borsh::to_vec, env, json_types::U128, near, CryptoHash};
 
-use crate::{u256::U256, util::u128_dec_format, Balance, TimestampSec};
+use crate::{u256::U256, Balance, TimestampSec, WrappedBalance};
 
 #[near(serializers=[borsh, json])]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Checkpoint {
     /// The unix-timestamp in seconds since the epoch.
     pub timestamp: TimestampSec,
-    #[serde(with = "u128_dec_format")]
-    pub balance: Balance,
+    pub balance: WrappedBalance,
 }
 
 #[near(serializers=[borsh, json])]
@@ -22,11 +21,11 @@ impl Schedule {
         Self(vec![
             Checkpoint {
                 timestamp: start_timestamp,
-                balance: 0,
+                balance: U128(0),
             },
             Checkpoint {
                 timestamp: finish_timestamp,
-                balance: 0,
+                balance: U128(0),
             },
         ])
     }
@@ -36,11 +35,11 @@ impl Schedule {
         Self(vec![
             Checkpoint {
                 timestamp: timestamp - 1,
-                balance: 0,
+                balance: U128(0),
             },
             Checkpoint {
                 timestamp,
-                balance: total_balance,
+                balance: U128(total_balance),
             },
         ])
     }
@@ -53,7 +52,7 @@ impl Schedule {
     pub fn assert_valid(&self, total_balance: Balance) {
         assert!(self.0.len() >= 2, "At least two checkpoints is required");
         assert_eq!(
-            self.0.first().unwrap().balance,
+            self.0.first().unwrap().balance.0,
             0,
             "The first checkpoint balance should be 0"
         );
@@ -64,7 +63,7 @@ impl Schedule {
                 i - 1
             );
             assert!(
-                self.0[i - 1].balance <= self.0[i].balance,
+                self.0[i - 1].balance.0 <= self.0[i].balance.0,
                 "The balance of checkpoint #{} should be not greater than the balance of the next checkpoint",
                 i - 1
             );
@@ -82,14 +81,14 @@ impl Schedule {
     pub fn assert_valid_termination_schedule(&self, termination_schedule: &Schedule) {
         for checkpoint in &self.0 {
             assert!(
-                checkpoint.balance <= termination_schedule.unlocked_balance(checkpoint.timestamp),
+                checkpoint.balance.0 <= termination_schedule.unlocked_balance(checkpoint.timestamp),
                 "The lockup schedule is ahead of the termination schedule at timestamp {}",
                 checkpoint.timestamp
             );
         }
         for checkpoint in &termination_schedule.0 {
             assert!(
-                checkpoint.balance >= self.unlocked_balance(checkpoint.timestamp),
+                checkpoint.balance.0 >= self.unlocked_balance(checkpoint.timestamp),
                 "The lockup schedule is ahead of the termination schedule at timestamp {}",
                 checkpoint.timestamp
             );
@@ -116,20 +115,20 @@ impl Schedule {
         let checkpoint = &self.0[index];
         if index + 1 == self.0.len() {
             // The last checkpoint. Fully unlocked.
-            return checkpoint.balance;
+            return checkpoint.balance.0;
         }
         let next_checkpoint = &self.0[index + 1];
 
         let total_duration = next_checkpoint.timestamp - checkpoint.timestamp;
         let passed_duration = current_timestamp - checkpoint.timestamp;
-        checkpoint.balance
-            + (U256::from(passed_duration) * U256::from(next_checkpoint.balance - checkpoint.balance)
+        checkpoint.balance.0
+            + (U256::from(passed_duration) * U256::from(next_checkpoint.balance.0 - checkpoint.balance.0)
                 / U256::from(total_duration))
             .as_u128()
     }
 
     pub fn total_balance(&self) -> Balance {
-        self.0.last().unwrap().balance
+        self.0.last().unwrap().balance.0
     }
 
     /// Terminates the lockup schedule earlier.
@@ -148,13 +147,13 @@ impl Schedule {
             self.0 = Self::new_zero_balance_from_to(start_timestamp, finish_timestamp).0;
             return;
         }
-        assert!(new_total_balance <= self.0.last().unwrap().balance, "Invariant");
+        assert!(new_total_balance <= self.0.last().unwrap().balance.0, "Invariant");
         while let Some(checkpoint) = self.0.pop() {
-            if self.0.last().unwrap().balance < new_total_balance {
+            if self.0.last().unwrap().balance.0 < new_total_balance {
                 let prev_checkpoint = self.0.last().unwrap().clone();
                 let timestamp_diff = checkpoint.timestamp - prev_checkpoint.timestamp;
-                let balance_diff = checkpoint.balance - prev_checkpoint.balance;
-                let required_balance_diff = new_total_balance - prev_checkpoint.balance;
+                let balance_diff = checkpoint.balance.0 - prev_checkpoint.balance.0;
+                let required_balance_diff = new_total_balance - prev_checkpoint.balance.0;
                 // Computing the new timestamp rounding up
                 let new_timestamp = prev_checkpoint.timestamp
                     + ((U256::from(timestamp_diff) * U256::from(required_balance_diff) + U256::from(balance_diff - 1))
@@ -162,7 +161,7 @@ impl Schedule {
                     .as_u32();
                 self.0.push(Checkpoint {
                     timestamp: new_timestamp,
-                    balance: new_total_balance,
+                    balance: U128(new_total_balance),
                 });
                 return;
             }

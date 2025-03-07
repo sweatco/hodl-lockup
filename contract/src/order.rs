@@ -103,7 +103,7 @@ impl OrderApi for Contract {
         self.orders.insert(&account_id, &orders);
 
         let mut lockup = self.lockups.get(u64::from(index)).expect("Lockup not found");
-        lockup.claimed_balance -= order.claim_amount.0;
+        lockup.claimed_balance.0 -= order.claim_amount.0;
         self.lockups.replace(u64::from(index), &lockup);
     }
 }
@@ -189,7 +189,7 @@ impl OrderCallback for Contract {
 
             for index in order.details.keys() {
                 let lockup = self.lockups.get(u64::from(*index)).expect("Cannot find lockup");
-                if lockup.claimed_balance == lockup.schedule.total_balance() {
+                if lockup.claimed_balance.0 == lockup.schedule.total_balance() {
                     account_lockup_indices.remove(index);
                 }
             }
@@ -211,7 +211,7 @@ impl Contract {
 
     fn refund(&mut self, index: LockupIndex, amount: Balance) {
         let mut lockup = self.lockups.get(u64::from(index)).expect("Lockup not found");
-        lockup.claimed_balance -= amount;
+        lockup.claimed_balance.0 -= amount;
         self.lockups.replace(u64::from(index), &lockup);
     }
 }

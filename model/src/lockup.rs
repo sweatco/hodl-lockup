@@ -1,4 +1,6 @@
 use near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    json_types::U128,
     near,
     serde::{Deserialize, Serialize},
     AccountId,
@@ -7,7 +9,7 @@ use near_sdk::{
 use crate::{
     schedule::Schedule,
     termination::{TerminationConfig, VestingConditions},
-    util::{current_timestamp_sec, u128_dec_format},
+    util::current_timestamp_sec,
     Balance, TimestampSec, WrappedBalance,
 };
 
@@ -28,8 +30,7 @@ pub struct Lockup {
     pub schedule: Schedule,
 
     #[serde(default)]
-    #[serde(with = "u128_dec_format")]
-    pub claimed_balance: Balance,
+    pub claimed_balance: WrappedBalance,
     /// An optional configuration that allows vesting/lockup termination.
     pub termination_config: Option<TerminationConfig>,
 }
@@ -39,7 +40,7 @@ impl Lockup {
         Self {
             account_id,
             schedule: Schedule::new_unlocked_since(total_balance, timestamp),
-            claimed_balance: 0,
+            claimed_balance: U128(0),
             termination_config: None,
         }
     }
@@ -49,27 +50,26 @@ impl Lockup {
     }
 
     pub fn claim(&mut self, index: LockupIndex, claim_amount: Balance) -> LockupClaim {
-        let unlocked_balance = self.schedule.unlocked_balance(current_timestamp_sec());
         let balance_claimed_new = self
             .claimed_balance
+            .0
             .checked_add(claim_amount)
             .expect("attempt to add with overflow");
         assert!(
-            unlocked_balance >= balance_claimed_new,
-            "too big claim_amount for lockup {index}",
+            balance_claimed_new <= self.schedule.total_balance(),
+            "Trying to claim more than the total balance"
         );
-
-        self.claimed_balance = balance_claimed_new;
+        self.claimed_balance = U128(balance_claimed_new);
         LockupClaim {
             index,
-            claim_amount: claim_amount.into(),
+            claim_amount: U128(claim_amount),
             is_final: balance_claimed_new == self.schedule.total_balance(),
         }
     }
 
     pub fn assert_new_valid(&self, total_balance: Balance) {
         assert_eq!(
-            self.claimed_balance, 0,
+            self.claimed_balance.0, 0,
             "The initial lockup claimed balance should be 0"
         );
         self.schedule.assert_valid(total_balance);
@@ -112,12 +112,11 @@ impl LockupCreate {
 
 impl LockupCreate {
     pub fn into_lockup(&self, payer_id: &AccountId) -> Lockup {
-        let vesting_schedule = self.vesting_schedule.clone();
         Lockup {
             account_id: self.account_id.clone(),
             schedule: self.schedule.clone(),
-            claimed_balance: 0,
-            termination_config: vesting_schedule.map(|vesting_schedule| TerminationConfig {
+            claimed_balance: U128(0),
+            termination_config: self.vesting_schedule.clone().map(|vesting_schedule| TerminationConfig {
                 beneficiary_id: payer_id.clone(),
                 vesting_schedule,
             }),
@@ -125,31 +124,31 @@ impl LockupCreate {
     }
 }
 
-#[derive(Serialize, Debug, PartialEq, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[json])]
+#[derive(Debug, PartialEq)]
 pub struct LockupView {
     pub account_id: AccountId,
     pub schedule: Schedule,
 
     #[serde(default)]
-    #[serde(with = "u128_dec_format")]
-    pub claimed_balance: Balance,
+    pub claimed_balance: WrappedBalance,
     /// An optional configuration that allows vesting/lockup termination.
     pub termination_config: Option<TerminationConfig>,
 
-    #[serde(with = "u128_dec_format")]
-    pub total_balance: Balance,
-    #[serde(with = "u128_dec_format")]
-    pub unclaimed_balance: Balance,
+    pub total_balance: WrappedBalance,
+    pub unclaimed_balance: WrappedBalance,
     /// The current timestamp
     pub timestamp: TimestampSec,
 }
 
 impl From<Lockup> for LockupView {
     fn from(lockup: Lockup) -> Self {
-        let total_balance = lockup.schedule.total_balance();
+        let total_balance = U128(lockup.schedule.total_balance());
         let timestamp = current_timestamp_sec();
-        let unclaimed_balance = lockup.schedule.unlocked_balance(timestamp) - lockup.claimed_balance;
+        let unclaimed_balance = lockup
+            .schedule
+            .unlocked_balance(timestamp)
+            .saturating_sub(lockup.claimed_balance.0);
         let Lockup {
             account_id,
             schedule,
@@ -162,34 +161,31 @@ impl From<Lockup> for LockupView {
             claimed_balance,
             termination_config,
             total_balance,
-            unclaimed_balance,
+            unclaimed_balance: U128(unclaimed_balance),
             timestamp,
         }
     }
 }
 
-#[derive(Serialize, Debug, PartialEq, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[json])]
+#[derive(Debug, PartialEq)]
 pub struct LockupCreateView {
     pub account_id: AccountId,
     pub schedule: Schedule,
     pub vesting_schedule: Option<VestingConditions>,
 
-    #[serde(with = "u128_dec_format")]
-    pub claimed_balance: Balance,
-    #[serde(with = "u128_dec_format")]
-    pub total_balance: Balance,
-    #[serde(with = "u128_dec_format")]
-    pub unclaimed_balance: Balance,
+    pub claimed_balance: WrappedBalance,
+    pub total_balance: WrappedBalance,
+    pub unclaimed_balance: WrappedBalance,
     /// The current timestamp
     pub timestamp: TimestampSec,
 }
 
 impl From<LockupCreate> for LockupCreateView {
     fn from(lockup_create: LockupCreate) -> Self {
-        let total_balance = lockup_create.schedule.total_balance();
+        let total_balance = U128(lockup_create.schedule.total_balance());
         let timestamp = current_timestamp_sec();
-        let unclaimed_balance = lockup_create.schedule.unlocked_balance(timestamp);
+        let unclaimed_balance = U128(lockup_create.schedule.unlocked_balance(timestamp));
         let LockupCreate {
             account_id,
             schedule,
@@ -199,7 +195,7 @@ impl From<LockupCreate> for LockupCreateView {
             account_id,
             schedule,
             vesting_schedule,
-            claimed_balance: 0,
+            claimed_balance: U128(0),
             total_balance,
             unclaimed_balance,
             timestamp,

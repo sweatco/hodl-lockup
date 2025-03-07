@@ -1,15 +1,17 @@
 use std::collections::HashSet;
 
 use near_sdk::{
-    env, near,
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    env,
+    json_types::U128,
+    near,
     serde::{Deserialize, Serialize},
     AccountId,
 };
 
 use crate::{
     lockup::{LockupCreate, LockupCreateView},
-    util::u128_dec_format,
-    Balance,
+    Balance, WrappedBalance,
 };
 
 pub type DraftGroupIndex = u32;
@@ -87,8 +89,7 @@ impl DraftGroup {
 
 #[near(serializers=[borsh, json])]
 pub struct DraftGroupView {
-    #[serde(with = "u128_dec_format")]
-    pub total_amount: Balance,
+    pub total_amount: WrappedBalance,
     pub payer_id: Option<AccountId>,
     pub draft_indices: Vec<DraftIndex>,
     pub discarded: bool,
@@ -97,18 +98,25 @@ pub struct DraftGroupView {
 
 impl From<DraftGroup> for DraftGroupView {
     fn from(draft_group: DraftGroup) -> Self {
+        let DraftGroup {
+            total_amount,
+            payer_id,
+            draft_indices,
+            discarded,
+        } = draft_group;
+        let funded = payer_id.is_some();
         Self {
-            total_amount: draft_group.total_amount,
-            payer_id: draft_group.payer_id.clone(),
-            draft_indices: draft_group.draft_indices.into_iter().collect(),
-            discarded: draft_group.discarded,
-            funded: draft_group.payer_id.is_some(),
+            total_amount: U128(total_amount),
+            payer_id,
+            draft_indices: draft_indices.into_iter().collect(),
+            discarded,
+            funded,
         }
     }
 }
 
-#[derive(Serialize, Debug, PartialEq, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[json])]
+#[derive(Debug, PartialEq)]
 pub struct DraftView {
     pub draft_group_id: DraftGroupIndex,
     pub lockup_create: LockupCreateView,

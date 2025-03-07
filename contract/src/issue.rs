@@ -33,14 +33,14 @@ impl IssueApi for Contract {
                 schedule: Schedule(vec![
                     Checkpoint {
                         timestamp: cliff_end_date,
-                        balance: 0,
+                        balance: 0.into(),
                     },
                     Checkpoint {
                         timestamp: lockup_end_date,
-                        balance: amount.0,
+                        balance: amount,
                     },
                 ]),
-                claimed_balance: 0,
+                claimed_balance: 0.into(),
                 termination_config: Some(termination_config.clone()),
             };
 

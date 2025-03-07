@@ -180,7 +180,7 @@ impl LockupApi for Contract {
                         } else {
                             let lockup = lockups_by_id.get(&lockup_id).expect("lockup not found");
                             let unlocked_balance = lockup.schedule.unlocked_balance(current_timestamp_sec());
-                            (unlocked_balance - lockup.claimed_balance).into()
+                            (unlocked_balance - lockup.claimed_balance.0).into()
                         },
                     )
                 })
@@ -193,7 +193,7 @@ impl LockupApi for Contract {
                 .iter()
                 .map(|(lockup_id, lockup)| {
                     let unlocked_balance = lockup.schedule.unlocked_balance(current_timestamp_sec());
-                    let amount: WrappedBalance = (unlocked_balance - lockup.claimed_balance).into();
+                    let amount: WrappedBalance = (unlocked_balance - lockup.claimed_balance.0).into();
 
                     (*lockup_id, amount)
                 })
