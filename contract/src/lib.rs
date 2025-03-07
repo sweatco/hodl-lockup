@@ -105,7 +105,7 @@ impl Contract {
     }
 }
 
-#[near_bindgen]
+#[near]
 impl LockupApi for Contract {
     #[init]
     fn new(

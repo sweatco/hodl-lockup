@@ -1,0 +1,15 @@
+# Environment variables
+.env
+
+# Dependencies
+node_modules/
+
+# Generated files
+failed_batches.json
+
+# Logs
+*.log
+
+# OS specific files
+.DS_Store
+Thumbs.db 
