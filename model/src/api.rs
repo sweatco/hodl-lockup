@@ -1,3 +1,6 @@
+#![allow(clippy::new_ret_no_self)]
+#![allow(clippy::wrong_self_convention)]
+
 use near_sdk::{json_types::Base58CryptoHash, PromiseOrValue};
 #[cfg(not(feature = "integration-test"))]
 use near_sdk::{json_types::U128, AccountId};

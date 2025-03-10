@@ -5,14 +5,17 @@ use hodl_model::{
     termination::{TerminationConfig, VestingConditions},
     TimestampSec, ONE_YEAR_SEC,
 };
-use near_sdk::{env, json_types::U128, near_bindgen, AccountId};
+#[cfg(feature = "integration-test")]
+use nitka::near_sdk::{env, json_types::U128, near, AccountId};
+#[cfg(not(feature = "integration-test"))]
+use near_sdk::{env, json_types::U128, near, AccountId};
 
 use crate::{
     event::{emit, EventKind, FtLockupCreateLockup},
     Contract, ContractExt,
 };
 
-#[near_bindgen]
+#[near]
 impl IssueApi for Contract {
     fn issue(&mut self, issue_date: TimestampSec, amounts: Vec<(AccountId, U128)>) {
         let issuer_id = env::predecessor_account_id();

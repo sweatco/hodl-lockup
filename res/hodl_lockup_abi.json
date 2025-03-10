@@ -10,7 +10,7 @@
       "compiler": "rustc 1.85.0",
       "builder": "cargo-near cargo-near-build 0.4.4"
     },
-    "wasm_hash": "9WcRjt4VqzB2JU2UCqbtqwjvYjynVTia9qhx5H6PnbSd"
+    "wasm_hash": "FHrkJDQffWZ54L3bMLvrtof31xXTHrHdQotDHmnjqrRn"
   },
   "body": {
     "functions": [

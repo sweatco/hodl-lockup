@@ -107,6 +107,7 @@ impl Contract {
 
 #[near]
 impl LockupApi for Contract {
+    #[allow(clippy::wrong_self_convention)]
     #[init]
     fn new(
         token_account_id: AccountId,
