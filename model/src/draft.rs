@@ -1,13 +1,6 @@
 use std::collections::HashSet;
 
-use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-    env,
-    json_types::U128,
-    near,
-    serde::{Deserialize, Serialize},
-    AccountId,
-};
+use near_sdk::{env, json_types::U128, near, AccountId};
 
 use crate::{
     lockup::{LockupCreate, LockupCreateView},

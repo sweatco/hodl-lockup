@@ -7,8 +7,8 @@ use hodl_model::{
     api::{IssueApiIntegration, LockupViewApiIntegration},
     ONE_YEAR_SEC,
 };
+use near_sdk::AccountId;
 use nitka::near_sdk::json_types::U128;
-use near_sdk::{AccountId};
 use rand::{distributions::Alphanumeric, Rng};
 use sweat_model::FungibleTokenCoreIntegration;
 

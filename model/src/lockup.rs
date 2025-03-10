@@ -1,10 +1,4 @@
-use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-    json_types::U128,
-    near,
-    serde::{Deserialize, Serialize},
-    AccountId,
-};
+use near_sdk::{json_types::U128, near, AccountId};
 
 use crate::{
     schedule::Schedule,
