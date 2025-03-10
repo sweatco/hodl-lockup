@@ -7,10 +7,10 @@ install: ##@Miscellaneous Install dependencies
 	@cargo build
 
 build: ##@Build Build the contract locally.
-	cargo near build non-reproducible-wasm --out-dir res --manifest-path contract/Cargo.toml
+	./scripts/build.sh
 
 build-release: ##@Build Build reproducible artifact in Docker.
-	cargo near build reproducible-wasm --out-dir res --manifest-path contract/Cargo.toml
+	./scripts/build-release.sh
 
 build-integration: ##@Build Build the contract for integration tests.
 	./scripts/build-integration.sh
