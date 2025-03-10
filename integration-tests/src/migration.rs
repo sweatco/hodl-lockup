@@ -1,8 +1,9 @@
 #![cfg(test)]
 
+use serde_json::to_string;
+use near_workspaces::types::NearToken;
 use anyhow::Result;
 use hodl_model::{api::LockupViewApiIntegration, ft_message::FtMessage, lockup::LockupCreate, schedule::Schedule};
-use near_sdk::{serde_json::to_string, NearToken};
 use nitka::misc::ToNear;
 use sweat_model::{FungibleTokenCoreIntegration, StorageManagementIntegration, SweatApiIntegration};
 

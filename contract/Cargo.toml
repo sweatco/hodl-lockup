@@ -8,8 +8,13 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [features]
-default = []
-integration-test = []
+default = ["release"]
+release = ["hodl-model/release-api"]
+integration-test = [
+    "hodl-model/release-api",
+    "hodl-model/integration-methods",
+]
+integration-api = ["hodl-model/integration-api"]
 
 [dependencies]
 
