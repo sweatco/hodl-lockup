@@ -5,9 +5,6 @@ use hodl_model::{
     termination::{TerminationConfig, VestingConditions},
     TimestampSec, ONE_YEAR_SEC,
 };
-#[cfg(feature = "integration-test")]
-use nitka::near_sdk::{env, json_types::U128, near, AccountId};
-#[cfg(not(feature = "integration-test"))]
 use near_sdk::{env, json_types::U128, near, AccountId};
 
 use crate::{
