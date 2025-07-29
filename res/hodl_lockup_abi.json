@@ -8,9 +8,9 @@
     ],
     "build": {
       "compiler": "rustc 1.85.0",
-      "builder": "cargo-near cargo-near-build 0.4.4"
+      "builder": "cargo-near cargo-near-build 0.7.1"
     },
-    "wasm_hash": "FHrkJDQffWZ54L3bMLvrtof31xXTHrHdQotDHmnjqrRn"
+    "wasm_hash": "JC4Buhib3vrXnyCoD2mdbyZEPbjXbAa44atjCJa334H1"
   },
   "body": {
     "functions": [
@@ -386,6 +386,10 @@
             }
           }
         }
+      },
+      {
+        "name": "create_testing_lockup",
+        "kind": "call"
       },
       {
         "name": "delete_drafts",
