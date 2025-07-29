@@ -8,7 +8,9 @@ use hodl_model::{
     lockup::{Lockup, LockupIndex},
     lockup_api::LockupApi,
     schedule::Schedule,
+    termination::TerminationConfig,
     util::current_timestamp_sec,
+    view_api::LockupViewApi,
     TimestampSec, TokenAccountId, WrappedBalance,
 };
 // use near_contract_standards::fungible_token::core_impl::ext_fungible_token;
@@ -31,6 +33,8 @@ pub mod internal;
 
 mod migration;
 pub mod view;
+
+mod tests;
 
 use crate::{
     callbacks::{ext_self, SelfCallbacks},
@@ -464,6 +468,26 @@ impl LockupApi for Contract {
                 self.draft_groups.insert(&draft_group_id as _, &draft_group);
             }
         }
+    }
+
+    #[payable]
+    fn edit(&mut self, index: LockupIndex, schedule: Option<Schedule>, termination_config: Option<TerminationConfig>) {
+        assert_one_yocto();
+
+        let mut lockup = self
+            .lockups
+            .get(index as _)
+            .unwrap_or_else(|| panic!("No lockup found at index {index}"));
+
+        if let Some(schedule) = schedule {
+            lockup.schedule = schedule;
+        }
+
+        if termination_config.is_some() {
+            lockup.termination_config = termination_config;
+        }
+
+        self.lockups.replace(index as _, &lockup);
     }
 }
 
