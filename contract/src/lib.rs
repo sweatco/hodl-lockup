@@ -34,8 +34,6 @@ pub mod internal;
 mod migration;
 pub mod view;
 
-mod tests;
-
 use crate::{
     callbacks::{ext_self, SelfCallbacks},
     event::{
@@ -472,6 +470,7 @@ impl LockupApi for Contract {
 
     #[payable]
     fn edit(&mut self, index: LockupIndex, schedule: Option<Schedule>, termination_config: Option<TerminationConfig>) {
+        self.assert_deposit_whitelist(&env::predecessor_account_id());
         assert_one_yocto();
 
         let mut lockup = self
@@ -488,6 +487,362 @@ impl LockupApi for Contract {
         }
 
         self.lockups.replace(index as _, &lockup);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hodl_model::lockup::Lockup;
+    use hodl_model::schedule::{Checkpoint, Schedule};
+    use hodl_model::termination::{TerminationConfig, VestingConditions};
+    use near_sdk::test_utils::{accounts, VMContextBuilder};
+    use near_sdk::{testing_env, AccountId, NearToken};
+
+    fn get_context(predecessor_account_id: AccountId, attached_deposit: NearToken) -> VMContextBuilder {
+        let mut builder = VMContextBuilder::new();
+        builder
+            .predecessor_account_id(predecessor_account_id)
+            .attached_deposit(attached_deposit)
+            .current_account_id(accounts(0)); // Assuming accounts(0) is the contract itself
+        builder
+    }
+
+    #[test]
+    fn test_edit_lockup_schedule_and_termination_config() {
+        let manager_account = accounts(0);
+        let beneficiary_account = accounts(1);
+        let token_account = accounts(2);
+
+        let mut context = get_context(manager_account.clone(), NearToken::from_yoctonear(1));
+        testing_env!(context.build());
+
+        let mut contract = Contract::new(
+            token_account.clone(),
+            vec![manager_account.clone()], // manager is in deposit whitelist
+            None,
+            manager_account.clone(),
+        );
+
+        // Create an initial lockup
+        let initial_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: 0,
+                balance: 1000,
+            },
+            Checkpoint {
+                timestamp: 100,
+                balance: 1000,
+            },
+        ]);
+        let initial_lockup = Lockup {
+            account_id: beneficiary_account.clone(),
+            schedule: initial_schedule.clone(),
+            claimed_balance: 0,
+            termination_config: None,
+        };
+        contract.lockups.push(&initial_lockup);
+        let lockup_index = 0; // The first lockup pushed will have index 0
+
+        // Define new schedule and termination config
+        let new_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: 10,
+                balance: 2000,
+            },
+            Checkpoint {
+                timestamp: 120,
+                balance: 2000,
+            },
+        ]);
+        let new_termination_config = TerminationConfig {
+            beneficiary_id: accounts(3),
+            vesting_schedule: VestingConditions::SameAsLockupSchedule,
+        };
+
+        // Call the edit function
+        contract.edit(
+            lockup_index,
+            Some(new_schedule.clone()),
+            Some(new_termination_config.clone()),
+        );
+
+        // Assert the lockup was updated
+        let updated_lockup = contract
+            .lockups
+            .get(lockup_index as _)
+            .expect("Lockup not found after edit");
+        assert_eq!(updated_lockup.schedule.0[0].timestamp, new_schedule.0[0].timestamp);
+        assert_eq!(updated_lockup.schedule.0[0].balance, new_schedule.0[0].balance);
+        assert_eq!(updated_lockup.schedule.0[1].timestamp, new_schedule.0[1].timestamp);
+        assert_eq!(updated_lockup.schedule.0[1].balance, new_schedule.0[1].balance);
+
+        assert!(updated_lockup.termination_config.is_some());
+        let actual_termination_config = updated_lockup.termination_config.unwrap();
+        assert_eq!(
+            actual_termination_config.beneficiary_id,
+            new_termination_config.beneficiary_id
+        );
+        assert_eq!(
+            actual_termination_config.vesting_schedule,
+            new_termination_config.vesting_schedule
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Not in deposit whitelist")]
+    fn test_edit_unauthorized() {
+        let manager_account = accounts(0);
+        let unauthorized_account = accounts(1);
+        let token_account = accounts(2);
+
+        let mut context = get_context(unauthorized_account.clone(), NearToken::from_yoctonear(1));
+        testing_env!(context.build());
+
+        let mut contract = Contract::new(
+            token_account.clone(),
+            vec![manager_account.clone()], // manager is in deposit whitelist
+            None,
+            manager_account.clone(),
+        );
+
+        // Create an initial lockup
+        let initial_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: 0,
+                balance: 1000,
+            },
+            Checkpoint {
+                timestamp: 100,
+                balance: 1000,
+            },
+        ]);
+        let initial_lockup = Lockup {
+            account_id: unauthorized_account.clone(),
+            schedule: initial_schedule.clone(),
+            claimed_balance: 0,
+            termination_config: None,
+        };
+        contract.lockups.push(&initial_lockup);
+        let lockup_index = 0;
+
+        // Attempt to edit as unauthorized user
+        contract.edit(lockup_index, None, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "No lockup found at index 999")]
+    fn test_edit_non_existent_lockup() {
+        let manager_account = accounts(0);
+        let token_account = accounts(2);
+
+        let mut context = get_context(manager_account.clone(), NearToken::from_yoctonear(1));
+        testing_env!(context.build());
+
+        let mut contract = Contract::new(
+            token_account.clone(),
+            vec![manager_account.clone()], // manager is in deposit whitelist
+            None,
+            manager_account.clone(),
+        );
+
+        // Attempt to edit a non-existent lockup
+        contract.edit(999, None, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+    fn test_edit_no_attached_deposit() {
+        let manager_account = accounts(0);
+        let beneficiary_account = accounts(1);
+        let token_account = accounts(2);
+
+        let mut context = get_context(manager_account.clone(), NearToken::from_yoctonear(0)); // 0 yoctoNEAR
+        testing_env!(context.build());
+
+        let mut contract = Contract::new(
+            token_account.clone(),
+            vec![manager_account.clone()], // manager is in deposit whitelist
+            None,
+            manager_account.clone(),
+        );
+
+        // Create an initial lockup
+        let initial_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: 0,
+                balance: 1000,
+            },
+            Checkpoint {
+                timestamp: 100,
+                balance: 1000,
+            },
+        ]);
+        let initial_lockup = Lockup {
+            account_id: beneficiary_account.clone(),
+            schedule: initial_schedule.clone(),
+            claimed_balance: 0,
+            termination_config: None,
+        };
+        contract.lockups.push(&initial_lockup);
+        let lockup_index = 0;
+
+        // Attempt to edit with no attached deposit
+        contract.edit(lockup_index, None, None);
+    }
+
+    #[test]
+    fn test_edit_only_schedule() {
+        let manager_account = accounts(0);
+        let beneficiary_account = accounts(1);
+        let token_account = accounts(2);
+
+        let mut context = get_context(manager_account.clone(), NearToken::from_yoctonear(1));
+        testing_env!(context.build());
+
+        let mut contract = Contract::new(
+            token_account.clone(),
+            vec![manager_account.clone()], // manager is in deposit whitelist
+            None,
+            manager_account.clone(),
+        );
+
+        // Create an initial lockup with a termination config
+        let initial_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: 0,
+                balance: 1000,
+            },
+            Checkpoint {
+                timestamp: 100,
+                balance: 1000,
+            },
+        ]);
+        let initial_termination_config = TerminationConfig {
+            beneficiary_id: accounts(5),
+            vesting_schedule: VestingConditions::SameAsLockupSchedule,
+        };
+        let initial_lockup = Lockup {
+            account_id: beneficiary_account.clone(),
+            schedule: initial_schedule.clone(),
+            claimed_balance: 0,
+            termination_config: Some(initial_termination_config.clone()),
+        };
+        contract.lockups.push(&initial_lockup);
+        let lockup_index = 0;
+
+        // Define new schedule
+        let new_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: 10,
+                balance: 2000,
+            },
+            Checkpoint {
+                timestamp: 120,
+                balance: 2000,
+            },
+        ]);
+
+        // Call the edit function, only updating schedule
+        contract.edit(
+            lockup_index,
+            Some(new_schedule.clone()),
+            None, // termination_config is None
+        );
+
+        // Assert the lockup was updated correctly
+        let updated_lockup = contract
+            .lockups
+            .get(lockup_index as _)
+            .expect("Lockup not found after edit");
+        assert_eq!(updated_lockup.schedule.0[0].timestamp, new_schedule.0[0].timestamp);
+        assert_eq!(updated_lockup.schedule.0[0].balance, new_schedule.0[0].balance);
+        assert_eq!(updated_lockup.schedule.0[1].timestamp, new_schedule.0[1].timestamp);
+        assert_eq!(updated_lockup.schedule.0[1].balance, new_schedule.0[1].balance);
+
+        // Ensure termination_config remains unchanged
+        assert!(updated_lockup.termination_config.is_some());
+        let actual_termination_config = updated_lockup.termination_config.unwrap();
+        assert_eq!(
+            actual_termination_config.beneficiary_id,
+            initial_termination_config.beneficiary_id
+        );
+        assert_eq!(
+            actual_termination_config.vesting_schedule,
+            initial_termination_config.vesting_schedule
+        );
+    }
+
+    #[test]
+    fn test_edit_only_termination_config() {
+        let manager_account = accounts(0);
+        let beneficiary_account = accounts(1);
+        let token_account = accounts(2);
+
+        let mut context = get_context(manager_account.clone(), NearToken::from_yoctonear(1));
+        testing_env!(context.build());
+
+        let mut contract = Contract::new(
+            token_account.clone(),
+            vec![manager_account.clone()], // manager is in deposit whitelist
+            None,
+            manager_account.clone(),
+        );
+
+        // Create an initial lockup with a schedule
+        let initial_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: 0,
+                balance: 1000,
+            },
+            Checkpoint {
+                timestamp: 100,
+                balance: 1000,
+            },
+        ]);
+        let initial_lockup = Lockup {
+            account_id: beneficiary_account.clone(),
+            schedule: initial_schedule.clone(),
+            claimed_balance: 0,
+            termination_config: None, // No initial termination config
+        };
+        contract.lockups.push(&initial_lockup);
+        let lockup_index = 0;
+
+        // Define new termination config
+        let new_termination_config = TerminationConfig {
+            beneficiary_id: accounts(3),
+            vesting_schedule: VestingConditions::SameAsLockupSchedule,
+        };
+
+        // Call the edit function, only updating termination config
+        contract.edit(
+            lockup_index,
+            None, // schedule is None
+            Some(new_termination_config.clone()),
+        );
+
+        // Assert the lockup was updated correctly
+        let updated_lockup = contract
+            .lockups
+            .get(lockup_index as _)
+            .expect("Lockup not found after edit");
+        // Ensure schedule remains unchanged
+        assert_eq!(updated_lockup.schedule.0[0].timestamp, initial_schedule.0[0].timestamp);
+        assert_eq!(updated_lockup.schedule.0[0].balance, initial_schedule.0[0].balance);
+        assert_eq!(updated_lockup.schedule.0[1].timestamp, initial_schedule.0[1].timestamp);
+        assert_eq!(updated_lockup.schedule.0[1].balance, initial_schedule.0[1].balance);
+
+        assert!(updated_lockup.termination_config.is_some());
+        let actual_termination_config = updated_lockup.termination_config.unwrap();
+        assert_eq!(
+            actual_termination_config.beneficiary_id,
+            new_termination_config.beneficiary_id
+        );
+        assert_eq!(
+            actual_termination_config.vesting_schedule,
+            new_termination_config.vesting_schedule
+        );
     }
 }
 
