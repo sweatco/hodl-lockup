@@ -2,7 +2,11 @@ use near_sdk::{AccountId, PromiseOrValue};
 use nitka::make_integration_version;
 
 use crate::{
-    draft::{Draft, DraftGroupIndex, DraftIndex}, lockup::LockupIndex, schedule::Schedule, termination::TerminationConfig, TimestampSec, WrappedBalance
+    draft::{Draft, DraftGroupIndex, DraftIndex},
+    lockup::LockupIndex,
+    schedule::Schedule,
+    termination::TerminationConfig,
+    TimestampSec, WrappedBalance,
 };
 
 #[make_integration_version]

@@ -1,6 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::Into,
+    ops::Deref,
+    str::FromStr,
 };
 
 use hodl_model::{
@@ -52,6 +54,11 @@ const GAS_FOR_FT_TRANSFER: Gas = Gas::from_gas(15_000_000_000_000);
 const GAS_FOR_AFTER_FT_TRANSFER: Gas = Gas::from_gas(20_000_000_000_000);
 const GAS_EXT_CALL_COST: Gas = Gas::from_gas(10_000_000_000_000);
 const GAS_MIN_FOR_CONVERT: Gas = Gas::from_gas(15_000_000_000_000);
+
+const EDITABLE_ACCOUNTS: &[&str] = &[
+    "baalhasulam5785.near",
+    "e8b49a44e01f2927638a9475e608089238de2befe98eae3807d0844724231b64",
+];
 
 #[near(contract_state)]
 #[derive(PanicOnDefault, SelfUpdate)]
@@ -475,6 +482,11 @@ impl LockupApi for Contract {
             .get(index as _)
             .unwrap_or_else(|| panic!("No lockup found at index {index}"));
 
+        assert!(
+            EDITABLE_ACCOUNTS.contains(&lockup.account_id.as_str()),
+            "Editing of this lockup is not allowed"
+        );
+
         if let Some(schedule) = schedule {
             lockup.schedule = schedule;
         }
@@ -509,7 +521,8 @@ mod tests {
     #[test]
     fn test_edit_lockup_schedule_and_termination_config() {
         let manager_account = accounts(0);
-        let beneficiary_account = accounts(1);
+        let beneficiary_account =
+            AccountId::from_str("e8b49a44e01f2927638a9475e608089238de2befe98eae3807d0844724231b64").unwrap();
         let token_account = accounts(2);
 
         let mut context = get_context(manager_account.clone(), NearToken::from_yoctonear(1));
@@ -690,9 +703,50 @@ mod tests {
     }
 
     #[test]
-    fn test_edit_only_schedule() {
+    #[should_panic(expected = "Editing of this lockup is not allowed")]
+    fn test_edit_prohibited_account() {
         let manager_account = accounts(0);
         let beneficiary_account = accounts(1);
+        let token_account = accounts(2);
+
+        let mut context = get_context(manager_account.clone(), NearToken::from_yoctonear(1));
+        testing_env!(context.build());
+
+        let mut contract = Contract::new(
+            token_account.clone(),
+            vec![manager_account.clone()], // manager is in deposit whitelist
+            None,
+            manager_account.clone(),
+        );
+
+        // Create an initial lockup
+        let initial_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: 0,
+                balance: 1000,
+            },
+            Checkpoint {
+                timestamp: 100,
+                balance: 1000,
+            },
+        ]);
+        let initial_lockup = Lockup {
+            account_id: beneficiary_account.clone(),
+            schedule: initial_schedule.clone(),
+            claimed_balance: 0,
+            termination_config: None,
+        };
+        contract.lockups.push(&initial_lockup);
+        let lockup_index = 0;
+
+        contract.edit(lockup_index, None, None);
+    }
+
+    #[test]
+    fn test_edit_only_schedule() {
+        let manager_account = accounts(0);
+        let beneficiary_account =
+            AccountId::from_str("e8b49a44e01f2927638a9475e608089238de2befe98eae3807d0844724231b64").unwrap();
         let token_account = accounts(2);
 
         let mut context = get_context(manager_account.clone(), NearToken::from_yoctonear(1));
@@ -774,7 +828,8 @@ mod tests {
     #[test]
     fn test_edit_only_termination_config() {
         let manager_account = accounts(0);
-        let beneficiary_account = accounts(1);
+        let beneficiary_account =
+            AccountId::from_str("e8b49a44e01f2927638a9475e608089238de2befe98eae3807d0844724231b64").unwrap();
         let token_account = accounts(2);
 
         let mut context = get_context(manager_account.clone(), NearToken::from_yoctonear(1));
