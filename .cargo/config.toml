@@ -1,3 +1,12 @@
+[profile.release]
+strip = true
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
+
 [profile.contract]
 inherits = "release"
 strip = true

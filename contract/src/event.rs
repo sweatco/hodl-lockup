@@ -138,6 +138,13 @@ pub struct FtLockupDeleteDraft {
 
 #[derive(Serialize, Debug)]
 #[serde(crate = "near_sdk::serde")]
+pub struct FtLockupUpdateOrder {
+    pub id: LockupIndex,
+    pub amount: WrappedBalance,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(crate = "near_sdk::serde")]
 #[serde(tag = "event", content = "data")]
 #[serde(rename_all = "snake_case")]
 #[allow(clippy::enum_variant_names)]
@@ -156,6 +163,8 @@ pub(crate) enum EventKind {
     FtLockupDiscardDraftGroup(Vec<FtLockupDiscardDraftGroup>),
     FtLockupDeleteDraft(Vec<FtLockupDeleteDraft>),
     FtLockupUpdateContract(FtLockupUpdateContract),
+
+    UpdateOrders(Vec<FtLockupUpdateOrder>),
 }
 
 #[derive(Serialize, Debug)]

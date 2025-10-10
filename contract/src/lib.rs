@@ -1,24 +1,25 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::Into,
+    str::FromStr,
 };
 
 use hodl_model::{
+    api::LockupApi,
     draft::{Draft, DraftGroup, DraftGroupIndex, DraftIndex},
-    lockup::{Lockup, LockupIndex},
-    lockup_api::LockupApi,
-    schedule::Schedule,
+    lockup::{Lockup, LockupClaim, LockupIndex},
+    schedule::{Checkpoint, Schedule},
+    termination::{TerminationConfig, VestingConditions},
     util::current_timestamp_sec,
     TimestampSec, TokenAccountId, WrappedBalance,
 };
-// use near_contract_standards::fungible_token::core_impl::ext_fungible_token;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::{
     assert_one_yocto,
     collections::{LookupMap, UnorderedMap, UnorderedSet, Vector},
     env, ext_contract, is_promise_success,
     json_types::{Base58CryptoHash, U128},
-    log, near, near_bindgen,
+    log, near, near_bindgen, require,
     serde::Serialize,
     serde_json, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue,
 };
@@ -29,7 +30,9 @@ pub mod event;
 pub mod ft_token_receiver;
 pub mod internal;
 
+mod issue;
 mod migration;
+mod order;
 pub mod view;
 
 use crate::{
@@ -38,7 +41,7 @@ use crate::{
         emit, EventKind, FtLockupAddToDepositWhitelist, FtLockupAddToDraftOperatorsWhitelist, FtLockupClaimLockup,
         FtLockupCreateDraft, FtLockupCreateDraftGroup, FtLockupCreateLockup, FtLockupDeleteDraft,
         FtLockupDiscardDraftGroup, FtLockupFundDraftGroup, FtLockupNew, FtLockupRemoveFromDepositWhitelist,
-        FtLockupRemoveFromDraftOperatorsWhitelist, FtLockupTerminateLockup,
+        FtLockupRemoveFromDraftOperatorsWhitelist, FtLockupTerminateLockup, FtLockupUpdateOrder,
     },
     serde_json::json,
 };
@@ -77,6 +80,9 @@ pub struct Contract {
 
     /// The account ID authorized to perform sensitive operations on the contract.
     pub manager: AccountId,
+
+    pub orders: LookupMap<AccountId, Vec<LockupClaim>>,
+    pub is_executing: bool,
 }
 
 #[near(serializers=[borsh, json])]
@@ -88,6 +94,7 @@ pub(crate) enum StorageKey {
     DraftOperatorsWhitelist,
     Drafts,
     DraftGroups,
+    Orders,
 }
 
 impl Contract {
@@ -100,8 +107,9 @@ impl Contract {
     }
 }
 
-#[near_bindgen]
+#[near]
 impl LockupApi for Contract {
+    #[allow(clippy::wrong_self_convention)]
     #[init]
     fn new(
         token_account_id: AccountId,
@@ -147,10 +155,17 @@ impl LockupApi for Contract {
             next_draft_group_id: 0,
             draft_groups: UnorderedMap::new(StorageKey::DraftGroups),
             manager,
+            orders: LookupMap::new(StorageKey::Orders),
+            is_executing: false,
         }
     }
 
-    fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> PromiseOrValue<WrappedBalance> {
+    fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> Vec<LockupClaim> {
+        require!(
+            !self.is_executing,
+            "Cannot place new order while other orders are being executed"
+        );
+
         let account_id = env::predecessor_account_id();
 
         let (claim_amounts, mut lockups_by_id) = if let Some(amounts) = amounts {
@@ -168,7 +183,7 @@ impl LockupApi for Contract {
                         } else {
                             let lockup = lockups_by_id.get(&lockup_id).expect("lockup not found");
                             let unlocked_balance = lockup.schedule.unlocked_balance(current_timestamp_sec());
-                            (unlocked_balance - lockup.claimed_balance).into()
+                            (unlocked_balance - lockup.claimed_balance.0).into()
                         },
                     )
                 })
@@ -181,7 +196,7 @@ impl LockupApi for Contract {
                 .iter()
                 .map(|(lockup_id, lockup)| {
                     let unlocked_balance = lockup.schedule.unlocked_balance(current_timestamp_sec());
-                    let amount: WrappedBalance = (unlocked_balance - lockup.claimed_balance).into();
+                    let amount: WrappedBalance = (unlocked_balance - lockup.claimed_balance.0).into();
 
                     (*lockup_id, amount)
                 })
@@ -189,42 +204,47 @@ impl LockupApi for Contract {
             (amounts, lockups_by_id)
         };
 
-        let account_id = env::predecessor_account_id();
+        if !self.orders.contains_key(&account_id) {
+            self.orders.insert(&account_id, &vec![]);
+        }
+
+        let mut account_orders = self.orders.get(&account_id).unwrap();
+
+        let mut orders_index = HashMap::<LockupIndex, usize>::new();
+        for (index, order) in account_orders.iter().enumerate() {
+            orders_index.insert(order.index, index);
+        }
+
         let mut lockup_claims = vec![];
-        let mut total_claim_amount = 0;
         for (lockup_index, lockup_claim_amount) in claim_amounts {
             let lockup = lockups_by_id.get_mut(&lockup_index).unwrap();
             let lockup_claim = lockup.claim(lockup_index, lockup_claim_amount.0);
 
             if lockup_claim.claim_amount.0 > 0 {
-                log!("Claiming {} form lockup #{}", lockup_claim.claim_amount.0, lockup_index);
-                total_claim_amount += lockup_claim.claim_amount.0;
                 self.lockups.replace(u64::from(lockup_index), lockup);
-                lockup_claims.push(lockup_claim);
+                lockup_claims.push(lockup_claim.clone());
+
+                if let Some(i) = orders_index.get(&lockup_claim.index) {
+                    let order = account_orders.get_mut(*i).expect("Order not found");
+                    order.claim_amount.0 += lockup_claim.claim_amount.0;
+                } else {
+                    account_orders.push(lockup_claim);
+                }
             }
         }
-        log!("Total claim {}", total_claim_amount);
+        self.orders.insert(&account_id, &account_orders);
 
-        if total_claim_amount > 0 {
-            Promise::new(self.token_account_id.clone())
-                .ft_transfer(
-                    &account_id,
-                    total_claim_amount,
-                    Some(format!(
-                        "Claiming unlocked {} balance from {}",
-                        total_claim_amount,
-                        env::current_account_id()
-                    )),
-                )
-                .then(
-                    ext_self::ext(env::current_account_id())
-                        .with_static_gas(GAS_FOR_AFTER_FT_TRANSFER)
-                        .after_ft_transfer(account_id, lockup_claims),
-                )
-                .into()
-        } else {
-            PromiseOrValue::Value(0.into())
-        }
+        emit(EventKind::UpdateOrders(
+            account_orders
+                .iter()
+                .map(|order| FtLockupUpdateOrder {
+                    id: order.index,
+                    amount: order.claim_amount.into(),
+                })
+                .collect(),
+        ));
+
+        lockup_claims
     }
 
     #[payable]

@@ -66,7 +66,7 @@ impl SelfCallbacks for Contract {
                     modified = true;
                 }
                 let mut lockup = self.lockups.get(u64::from(index)).unwrap();
-                lockup.claimed_balance -= claim_amount.0;
+                lockup.claimed_balance.0 -= claim_amount.0;
                 self.lockups.replace(u64::from(index), &lockup);
             }
 

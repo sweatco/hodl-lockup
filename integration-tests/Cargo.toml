@@ -15,13 +15,18 @@ tokio = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 ed25519-dalek = { workspace = true }
+serde_json = { workspace = true }
 
 near-sdk = { workspace = true }
 near-workspaces = { workspace = true }
 
-hodl-model = { workspace = true }
-nitka = { workspace = true }
+hodl-model = { workspace = true, features = [
+    "integration-test",
+    "integration-methods",
+    "integration-api",
+] }
+sweat-model = { workspace = true, features = ["integration-api"] }
 
-sweat-model = { workspace = true }
+nitka = { workspace = true }
 
 multisig-model = { workspace = true }

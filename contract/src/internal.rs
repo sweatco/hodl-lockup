@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use hodl_model::lockup::{Lockup, LockupIndex};
+use near_sdk::{env, require, Gas};
 
 use crate::{AccountId, Contract};
 
@@ -61,4 +62,12 @@ impl Contract {
             })
             .collect()
     }
+}
+
+pub(crate) fn assert_enough_gas(required: Gas) {
+    require!(remaining_gas() >= required, "Not enough gas for further operations");
+}
+
+fn remaining_gas() -> Gas {
+    Gas::from_gas(env::prepaid_gas().as_gas() - env::used_gas().as_gas())
 }

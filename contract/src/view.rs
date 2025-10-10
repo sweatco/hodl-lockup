@@ -1,14 +1,15 @@
 use hodl_model::{
+    api::LockupViewApi,
     draft::{DraftGroupIndex, DraftGroupView, DraftIndex, DraftView},
     lockup::{LockupIndex, LockupView},
     schedule::Schedule,
-    view_api::LockupViewApi,
     WrappedBalance,
 };
+use near_sdk::near;
 
-use crate::{near_bindgen, AccountId, Base58CryptoHash, Contract, ContractExt, Into, VERSION};
+use crate::{AccountId, Base58CryptoHash, Contract, ContractExt, Into, VERSION};
 
-#[near_bindgen]
+#[near]
 impl LockupViewApi for Contract {
     fn get_token_account_id(&self) -> AccountId {
         self.token_account_id.clone()
