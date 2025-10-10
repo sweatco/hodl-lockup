@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use hodl_model::{
     lockup::{LockupClaim, LockupIndex},
     order::{OrderApi, OrderExecution, OrdersExecutionResult},
@@ -28,6 +30,17 @@ impl OrderApi for Contract {
         self.assert_deposit_whitelist(&env::predecessor_account_id());
 
         let percentage = unwrap_percentage(percentage);
+
+        if percentage == 0 {
+            self.execute_internal(account_ids.clone(), percentage);
+
+            let result = OrdersExecutionResult {
+                approved: HashMap::new(),
+                rejected: account_ids,
+            };
+
+            return PromiseOrValue::Value(result);
+        }
 
         let mut transfer_promise: Option<Promise> = None;
         let mut orders = Vec::<OrderExecution>::new();
@@ -72,17 +85,7 @@ impl OrderApi for Contract {
         self.assert_deposit_whitelist(&env::predecessor_account_id());
 
         let percentage = unwrap_percentage(percentage);
-
-        let mut result = Vec::<OrderExecution>::new();
-
-        for account_id in account_ids {
-            let order_execution = self.execute_order(account_id.clone(), percentage);
-
-            result.push(order_execution);
-            self.orders.remove(&account_id).expect("Couldn't delete orders");
-        }
-
-        result
+        self.execute_internal(account_ids, percentage)
     }
 
     fn revoke(&mut self, index: LockupIndex) {
@@ -108,6 +111,21 @@ impl OrderApi for Contract {
     }
 }
 
+impl Contract {
+    fn execute_internal(&mut self, account_ids: Vec<AccountId>, percentage: u32) -> Vec<OrderExecution> {
+        let mut result = Vec::<OrderExecution>::new();
+
+        for account_id in account_ids {
+            let order_execution = self.execute_order(account_id.clone(), percentage);
+
+            result.push(order_execution);
+            self.orders.remove(&account_id).expect("Couldn't delete orders");
+        }
+
+        result
+    }
+}
+
 fn unwrap_percentage(percentage: Option<u32>) -> u32 {
     let percentage = percentage.unwrap_or(10000);
     require!(
@@ -118,11 +136,17 @@ fn unwrap_percentage(percentage: Option<u32>) -> u32 {
 }
 
 fn calculate_percentage(value: u128, percentage: u32) -> u128 {
-    value
-        .checked_mul(percentage as u128)
-        .expect("Failed to multiply")
-        .checked_div(10000)
-        .expect("Failed to divide")
+    if percentage == 10_000 {
+        value
+    } else if percentage == 0 {
+        0
+    } else {
+        value
+            .checked_mul(percentage as u128)
+            .expect("Failed to multiply")
+            .checked_div(10_000)
+            .expect("Failed to divide")
+    }
 }
 
 impl Contract {
@@ -135,7 +159,7 @@ impl Contract {
             let approved_amount = calculate_percentage(requested_amount, percentage);
             let refund_amount = requested_amount - approved_amount;
 
-            if approved_amount > requested_amount {
+            if refund_amount > 0 {
                 self.refund(order.index, refund_amount);
             }
 
