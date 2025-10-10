@@ -1,15 +1,13 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::Into,
-    str::FromStr,
 };
 
 use hodl_model::{
     api::LockupApi,
     draft::{Draft, DraftGroup, DraftGroupIndex, DraftIndex},
     lockup::{Lockup, LockupClaim, LockupIndex},
-    schedule::{Checkpoint, Schedule},
-    termination::{TerminationConfig, VestingConditions},
+    schedule::Schedule,
     util::current_timestamp_sec,
     TimestampSec, TokenAccountId, WrappedBalance,
 };
@@ -259,10 +257,6 @@ impl LockupApi for Contract {
         let mut lockup = self.lockups.get(u64::from(lockup_index)).expect("Lockup not found");
         let current_timestamp = current_timestamp_sec();
         let termination_timestamp = termination_timestamp.unwrap_or(current_timestamp);
-        assert!(
-            termination_timestamp >= current_timestamp,
-            "expected termination_timestamp >= now",
-        );
         let (unvested_balance, beneficiary_id) = lockup.terminate(hashed_schedule, termination_timestamp);
         self.lockups.replace(u64::from(lockup_index), &lockup);
 
@@ -508,5 +502,248 @@ impl FtTransferPromise for Promise {
             NearToken::from_yoctonear(1),
             GAS_FOR_FT_TRANSFER,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use hodl_model::{
+        lockup::Lockup,
+        schedule::{Checkpoint, Schedule},
+        termination::{TerminationConfig, VestingConditions},
+    };
+    use near_sdk::{test_utils::VMContextBuilder, testing_env, AccountId};
+
+    const ONE_YEAR_SEC: u32 = 31_536_000;
+    const GENESIS_TIMESTAMP_SEC: u32 = 0;
+
+    fn alice() -> AccountId {
+        AccountId::from_str("alice.near").unwrap()
+    }
+
+    fn beneficiary() -> AccountId {
+        AccountId::from_str("beneficiary.near").unwrap()
+    }
+
+    #[test]
+    fn test_terminate_retroactively_adjusts_timestamp() {
+        let mut builder = VMContextBuilder::new();
+        builder.predecessor_account_id(alice());
+        testing_env!(builder.build());
+
+        let total_balance = 1_000_000;
+        let lockup_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: GENESIS_TIMESTAMP_SEC,
+                balance: 0.into(),
+            },
+            Checkpoint {
+                timestamp: GENESIS_TIMESTAMP_SEC + 4 * ONE_YEAR_SEC,
+                balance: total_balance.into(),
+            },
+        ]);
+
+        let vesting_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: GENESIS_TIMESTAMP_SEC + ONE_YEAR_SEC,
+                balance: 0.into(),
+            },
+            Checkpoint {
+                timestamp: GENESIS_TIMESTAMP_SEC + 2 * ONE_YEAR_SEC,
+                balance: total_balance.into(),
+            },
+        ]);
+
+        // At 1.5 years, user claims tokens.
+        // Vested: 500_000 (1/2 of total, since vesting is 1 year linear)
+        // Unlocked: 375_000 (1.5 / 4 years)
+        // Claimable is min(500_000, 375_000) = 375_000
+        let claimed_balance = 375_000.into();
+        let mut lockup = Lockup {
+            account_id: alice(),
+            schedule: lockup_schedule.clone(),
+            claimed_balance,
+            termination_config: Some(TerminationConfig {
+                beneficiary_id: beneficiary(),
+                vesting_schedule: VestingConditions::Schedule(vesting_schedule.clone()),
+            }),
+        };
+
+        let claim_timestamp = GENESIS_TIMESTAMP_SEC + 3 * ONE_YEAR_SEC / 2;
+        assert_eq!(
+            claimed_balance,
+            lockup.schedule.unlocked_balance(claim_timestamp).into()
+        );
+
+        // Now, terminate retroactively at 1 year.
+        // At this point, vested_balance is 0 according to vesting_schedule.
+        let termination_timestamp = GENESIS_TIMESTAMP_SEC + ONE_YEAR_SEC;
+
+        // Since vested_balance (0) < claimed_balance (375_000), the logic should trigger.
+        // The new vested_balance will be claimed_balance (375_000).
+        // The new termination_timestamp will be calculated via `lockup_schedule.get_vesting_timestamp_for_amount(0)`,
+        // which corresponds to GENESIS_TIMESTAMP_SEC.
+
+        let (unvested_balance, beneficiary_id) = lockup.terminate(None, termination_timestamp);
+
+        // unvested = total - new_vested = 1,000,000 - 375_000 = 625_000
+        assert_eq!(unvested_balance, 625_000);
+        assert_eq!(beneficiary_id, beneficiary());
+
+        // Check the lockup state after termination
+        // The schedule should be terminated with the new values.
+        assert_eq!(lockup.schedule.total_balance(), 375_000);
+
+        // The last checkpoint of the schedule should be at the *new* termination_timestamp.
+        let final_timestamp = lockup.schedule.0.last().unwrap().timestamp;
+
+        // The new timestamp is calculated with `get_vesting_timestamp_for_amount(0)` on the lockup schedule.
+        // For a linear schedule, this should be the start of the schedule.
+        let expected_new_timestamp = lockup_schedule.get_vesting_timestamp_for_amount(375_000);
+        assert!(final_timestamp.abs_diff(expected_new_timestamp) <= 1);
+        assert!(claim_timestamp > termination_timestamp);
+    }
+
+    #[test]
+    fn test_terminate_no_claims() {
+        let mut builder = VMContextBuilder::new();
+        builder.predecessor_account_id(alice());
+        testing_env!(builder.build());
+
+        let total_balance = 15_000_000;
+        let lockup_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: GENESIS_TIMESTAMP_SEC + ONE_YEAR_SEC,
+                balance: 0.into(),
+            },
+            Checkpoint {
+                timestamp: GENESIS_TIMESTAMP_SEC + 4 * ONE_YEAR_SEC,
+                balance: total_balance.into(),
+            },
+        ]);
+
+        let mut lockup = Lockup {
+            account_id: alice(),
+            schedule: lockup_schedule.clone(),
+            claimed_balance: 0.into(), // No claims
+            termination_config: Some(TerminationConfig {
+                beneficiary_id: beneficiary(),
+                vesting_schedule: VestingConditions::SameAsLockupSchedule,
+            }),
+        };
+
+        // Terminate at 1.5 years.
+        let termination_timestamp = GENESIS_TIMESTAMP_SEC + 3 * ONE_YEAR_SEC / 2;
+
+        // At this point, vested_balance is 2_500_000 (1/6 of total_balance, since vesting is 3 year linear from year 1 to 4).
+        let vested_balance = lockup.schedule.unlocked_balance(termination_timestamp);
+        assert_eq!(vested_balance, 2_500_000);
+
+        let (unvested_balance, beneficiary_id) = lockup.terminate(None, termination_timestamp);
+
+        // unvested = total - vested = 15,000,000 - 2,500,000 = 12,500,000
+        assert_eq!(unvested_balance, 12_500_000);
+        assert_eq!(beneficiary_id, beneficiary());
+
+        // Check the lockup state after termination
+        assert_eq!(lockup.schedule.total_balance(), vested_balance);
+        let final_timestamp = lockup.schedule.0.last().unwrap().timestamp;
+        assert_eq!(final_timestamp, termination_timestamp);
+        assert_eq!(lockup.claimed_balance.0, 0);
+    }
+
+    #[test]
+    fn test_terminate_retroactively_no_claims() {
+        let mut builder = VMContextBuilder::new();
+        builder.predecessor_account_id(alice());
+        testing_env!(builder.build());
+
+        let total_balance = 35_000_000;
+        let lockup_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: GENESIS_TIMESTAMP_SEC + ONE_YEAR_SEC,
+                balance: 0.into(),
+            },
+            Checkpoint {
+                timestamp: GENESIS_TIMESTAMP_SEC + 4 * ONE_YEAR_SEC,
+                balance: total_balance.into(),
+            },
+        ]);
+
+        let mut lockup = Lockup {
+            account_id: alice(),
+            schedule: lockup_schedule.clone(),
+            claimed_balance: 0.into(), // No claims
+            termination_config: Some(TerminationConfig {
+                beneficiary_id: beneficiary(),
+                vesting_schedule: VestingConditions::SameAsLockupSchedule,
+            }),
+        };
+
+        // Terminate retroactively at 11 months.
+        let termination_timestamp = GENESIS_TIMESTAMP_SEC + ONE_YEAR_SEC * 11 / 12;
+
+        // At this point, vested_balance is 0 according to vesting_schedule.
+        let vested_balance = lockup.schedule.unlocked_balance(termination_timestamp);
+        assert_eq!(vested_balance, 0);
+
+        // Since claimed_balance is 0, no special adjustment should happen.
+        let (unvested_balance, beneficiary_id) = lockup.terminate(None, termination_timestamp);
+
+        // unvested = total - vested = 35,000,000 - 0 = 35,000,000
+        assert_eq!(unvested_balance, 35_000_000);
+        assert_eq!(beneficiary_id, beneficiary());
+
+        // Check the lockup state after termination
+        assert_eq!(lockup.schedule.total_balance(), vested_balance);
+        let final_timestamp = lockup.schedule.0.last().unwrap().timestamp;
+        assert_eq!(final_timestamp, lockup.schedule.0.first().unwrap().timestamp + 1);
+        assert_eq!(lockup.claimed_balance.0, 0);
+    }
+
+    #[test]
+    pub fn test_vesting_timestamp_evaluation() {
+        let mut builder = VMContextBuilder::new();
+        builder.predecessor_account_id(alice());
+        testing_env!(builder.build());
+
+        let total_balance = 5_000_000_000_000_000_000_000_000;
+        let lockup_schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: GENESIS_TIMESTAMP_SEC + ONE_YEAR_SEC,
+                balance: 0.into(),
+            },
+            Checkpoint {
+                timestamp: GENESIS_TIMESTAMP_SEC + 4 * ONE_YEAR_SEC,
+                balance: total_balance.into(),
+            },
+        ]);
+
+        let lockup = Lockup {
+            account_id: alice(),
+            schedule: lockup_schedule.clone(),
+            claimed_balance: 0.into(),
+            termination_config: Some(TerminationConfig {
+                beneficiary_id: beneficiary(),
+                vesting_schedule: VestingConditions::SameAsLockupSchedule,
+            }),
+        };
+
+        let reference_timestamps = vec![
+            GENESIS_TIMESTAMP_SEC + ONE_YEAR_SEC + 30 * 60 * 60,
+            GENESIS_TIMESTAMP_SEC + ONE_YEAR_SEC + 70 * 30 * 60 * 60,
+            GENESIS_TIMESTAMP_SEC + 2 * ONE_YEAR_SEC + 95 * 30 * 60 * 60 + 2,
+            GENESIS_TIMESTAMP_SEC + 3 * ONE_YEAR_SEC + 30 * 60 + 7,
+        ];
+
+        for reference_timestamp in reference_timestamps {
+            let reference_amount = lockup.schedule.unlocked_balance(reference_timestamp);
+            assert_eq!(
+                reference_timestamp,
+                lockup.schedule.get_vesting_timestamp_for_amount(reference_amount)
+            );
+        }
     }
 }

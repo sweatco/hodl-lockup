@@ -176,4 +176,35 @@ impl Schedule {
 
         res
     }
+
+    pub fn get_vesting_timestamp_for_amount(&self, amount: Balance) -> TimestampSec {
+        // Using binary search by time to find the current checkpoint.
+        let index = match self.0.binary_search_by_key(&amount, |checkpoint| checkpoint.balance.0) {
+            // Exact timestamp found
+            Ok(index) => index,
+            // No match, the next index is given.
+            Err(index) => {
+                if index == 0 {
+                    // Not started
+                    return 0;
+                }
+                index - 1
+            }
+        };
+        let checkpoint = &self.0[index];
+        if index + 1 == self.0.len() {
+            // The last checkpoint. Fully unlocked.
+            return checkpoint.timestamp;
+        }
+        let next_checkpoint = &self.0[index + 1];
+
+        let total_balance = next_checkpoint.balance.0 - checkpoint.balance.0;
+        let total_duration = next_checkpoint.timestamp - checkpoint.timestamp;
+        let claimed_delta = amount - checkpoint.balance.0;
+        let time_delta = ((U256::from(claimed_delta) * U256::from(total_duration) + U256::from(total_balance))
+            / U256::from(total_balance))
+        .as_u32();
+
+        checkpoint.timestamp + time_delta
+    }
 }

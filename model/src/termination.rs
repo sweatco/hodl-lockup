@@ -43,6 +43,14 @@ impl Lockup {
             VestingConditions::Schedule(schedule) => schedule,
         }
         .unlocked_balance(termination_timestamp);
+
+        let (vested_balance, termination_timestamp) = if vested_balance >= self.claimed_balance.0 {
+            (vested_balance, termination_timestamp)
+        } else {
+            let last_claim_timestamp = self.schedule.get_vesting_timestamp_for_amount(vested_balance);
+            (self.claimed_balance.0, last_claim_timestamp)
+        };
+
         let unvested_balance = total_balance - vested_balance;
         if unvested_balance > 0 {
             self.schedule.terminate(vested_balance, termination_timestamp);
