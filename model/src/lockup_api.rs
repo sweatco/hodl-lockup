@@ -5,6 +5,7 @@ use crate::{
     draft::{Draft, DraftGroupIndex, DraftIndex},
     lockup::LockupIndex,
     schedule::Schedule,
+    termination::TerminationConfig,
     TimestampSec, WrappedBalance,
 };
 
@@ -47,4 +48,6 @@ pub trait LockupApi {
     fn discard_draft_group(&mut self, draft_group_id: DraftGroupIndex);
 
     fn delete_drafts(&mut self, draft_ids: Vec<DraftIndex>);
+
+    fn edit(&mut self, index: LockupIndex, schedule: Option<Schedule>, termination_config: Option<TerminationConfig>);
 }
