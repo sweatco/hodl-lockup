@@ -1,8 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::Into,
-    ops::Deref,
-    str::FromStr,
 };
 
 use hodl_model::{
@@ -12,10 +10,8 @@ use hodl_model::{
     schedule::Schedule,
     termination::TerminationConfig,
     util::current_timestamp_sec,
-    view_api::LockupViewApi,
     TimestampSec, TokenAccountId, WrappedBalance,
 };
-// use near_contract_standards::fungible_token::core_impl::ext_fungible_token;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::{
     assert_one_yocto,

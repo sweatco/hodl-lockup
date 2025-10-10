@@ -45,11 +45,9 @@ impl Lockup {
         .unlocked_balance(termination_timestamp);
 
         let (vested_balance, termination_timestamp) = if vested_balance >= self.claimed_balance {
-            println!("@@ Use data as is");
             (vested_balance, termination_timestamp)
         } else {
             let last_claim_timestamp = self.schedule.get_vesting_timestamp_for_amount(vested_balance);
-            println!("@@ Adjust data");
             (self.claimed_balance, last_claim_timestamp)
         };
 
@@ -58,7 +56,6 @@ impl Lockup {
             self.schedule.terminate(vested_balance, termination_timestamp);
         }
 
-        dbg!(self.schedule.clone());
         (unvested_balance, termination_config.beneficiary_id)
     }
 }
