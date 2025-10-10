@@ -1,13 +1,15 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::Into,
+    str::FromStr,
 };
 
 use hodl_model::{
     api::LockupApi,
     draft::{Draft, DraftGroup, DraftGroupIndex, DraftIndex},
     lockup::{Lockup, LockupClaim, LockupIndex},
-    schedule::Schedule,
+    schedule::{Checkpoint, Schedule},
+    termination::{TerminationConfig, VestingConditions},
     util::current_timestamp_sec,
     TimestampSec, TokenAccountId, WrappedBalance,
 };
@@ -39,7 +41,7 @@ use crate::{
         emit, EventKind, FtLockupAddToDepositWhitelist, FtLockupAddToDraftOperatorsWhitelist, FtLockupClaimLockup,
         FtLockupCreateDraft, FtLockupCreateDraftGroup, FtLockupCreateLockup, FtLockupDeleteDraft,
         FtLockupDiscardDraftGroup, FtLockupFundDraftGroup, FtLockupNew, FtLockupRemoveFromDepositWhitelist,
-        FtLockupRemoveFromDraftOperatorsWhitelist, FtLockupTerminateLockup,
+        FtLockupRemoveFromDraftOperatorsWhitelist, FtLockupTerminateLockup, FtLockupUpdateOrder,
     },
     serde_json::json,
 };
@@ -231,6 +233,16 @@ impl LockupApi for Contract {
             }
         }
         self.orders.insert(&account_id, &account_orders);
+
+        emit(EventKind::UpdateOrders(
+            account_orders
+                .iter()
+                .map(|order| FtLockupUpdateOrder {
+                    id: order.index,
+                    amount: order.claim_amount.into(),
+                })
+                .collect(),
+        ));
 
         lockup_claims
     }
