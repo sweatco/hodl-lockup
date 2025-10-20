@@ -8,6 +8,7 @@ use hodl_model::{
     draft::{Draft, DraftGroup, DraftGroupIndex, DraftIndex},
     lockup::{Lockup, LockupClaim, LockupIndex},
     schedule::Schedule,
+    termination::{TerminationConfig, VestingConditions},
     util::current_timestamp_sec,
     TimestampSec, TokenAccountId, WrappedBalance,
 };
@@ -254,7 +255,15 @@ impl LockupApi for Contract {
     ) -> PromiseOrValue<WrappedBalance> {
         assert_one_yocto();
         self.assert_deposit_whitelist(&env::predecessor_account_id());
+
         let mut lockup = self.lockups.get(u64::from(lockup_index)).expect("Lockup not found");
+        if lockup.termination_config.is_none() {
+            lockup.termination_config = Some(TerminationConfig {
+                beneficiary_id: env::current_account_id(),
+                vesting_schedule: VestingConditions::SameAsLockupSchedule,
+            });
+        }
+
         let current_timestamp = current_timestamp_sec();
         let termination_timestamp = termination_timestamp.unwrap_or(current_timestamp);
         let (unvested_balance, beneficiary_id) = lockup.terminate(hashed_schedule, termination_timestamp);

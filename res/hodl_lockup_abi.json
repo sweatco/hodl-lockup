@@ -8,9 +8,9 @@
     ],
     "build": {
       "compiler": "rustc 1.85.0",
-      "builder": "cargo-near cargo-near-build 0.7.1"
+      "builder": "cargo-near cargo-near-build 0.9.0"
     },
-    "wasm_hash": "AK52uQ5U17rYgrGrMPzFUsWzTi9Yp2dekUFAs7chTDVE"
+    "wasm_hash": "HQMdub13nsmsBCSR5UWzpzgyzwr6CJQKpj2RpAzmE63U"
   },
   "body": {
     "functions": [
@@ -997,6 +997,24 @@
         }
       },
       {
+        "name": "on_migrated",
+        "kind": "call",
+        "params": {
+          "serialization_type": "json",
+          "args": [
+            {
+              "name": "account_ids",
+              "type_schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/AccountId"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
         "name": "on_orders_executed",
         "kind": "call",
         "modifiers": [
@@ -1149,6 +1167,36 @@
           "serialization_type": "json",
           "type_schema": {
             "$ref": "#/definitions/PromiseOrValueString"
+          }
+        }
+      },
+      {
+        "name": "transfer_accounts",
+        "kind": "call",
+        "params": {
+          "serialization_type": "json",
+          "args": [
+            {
+              "name": "contract_id",
+              "type_schema": {
+                "$ref": "#/definitions/AccountId"
+              }
+            },
+            {
+              "name": "account_ids",
+              "type_schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/AccountId"
+                }
+              }
+            }
+          ]
+        },
+        "result": {
+          "serialization_type": "json",
+          "type_schema": {
+            "$ref": "#/definitions/PromiseOrValueNull"
           }
         }
       },
@@ -1498,6 +1546,9 @@
           }
         },
         "Promise": true,
+        "PromiseOrValueNull": {
+          "type": "null"
+        },
         "PromiseOrValueOrdersExecutionResult": {
           "type": "object",
           "required": [
