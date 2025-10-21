@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::Into,
+    str::FromStr,
 };
 
 use hodl_model::{
@@ -16,7 +17,8 @@ use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::{
     assert_one_yocto,
     collections::{LookupMap, UnorderedMap, UnorderedSet, Vector},
-    env, ext_contract, is_promise_success,
+    env::{self, panic_str},
+    ext_contract, is_promise_success,
     json_types::{Base58CryptoHash, U128},
     log, near, near_bindgen, require,
     serde::Serialize,
@@ -52,6 +54,8 @@ const GAS_FOR_FT_TRANSFER: Gas = Gas::from_gas(15_000_000_000_000);
 const GAS_FOR_AFTER_FT_TRANSFER: Gas = Gas::from_gas(20_000_000_000_000);
 const GAS_EXT_CALL_COST: Gas = Gas::from_gas(10_000_000_000_000);
 const GAS_MIN_FOR_CONVERT: Gas = Gas::from_gas(15_000_000_000_000);
+
+const DEFAULT_BENEFICIARY_ID: &str = "grants.sweat";
 
 #[near(contract_state)]
 #[derive(PanicOnDefault, SelfUpdate)]
@@ -259,7 +263,8 @@ impl LockupApi for Contract {
         let mut lockup = self.lockups.get(u64::from(lockup_index)).expect("Lockup not found");
         if lockup.termination_config.is_none() {
             lockup.termination_config = Some(TerminationConfig {
-                beneficiary_id: env::current_account_id(),
+                beneficiary_id: AccountId::from_str(DEFAULT_BENEFICIARY_ID)
+                    .unwrap_or_else(|_| panic_str("Failed to parse account id")),
                 vesting_schedule: VestingConditions::SameAsLockupSchedule,
             });
         }
