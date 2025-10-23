@@ -1,8 +1,10 @@
+use std::collections::HashSet;
+
 use hodl_model::{
     api::LockupViewApi,
-    lockup::{LockupIndex, LockupView},
+    lockup::{LockupClaim, LockupIndex, LockupView},
 };
-use near_sdk::near;
+use near_sdk::{json_types::U128, near};
 
 use crate::{AccountId, Contract, ContractExt, Into, VERSION};
 
@@ -52,5 +54,37 @@ impl LockupViewApi for Contract {
 
     fn get_version(&self) -> String {
         VERSION.into()
+    }
+
+    fn get_orders(&self) -> Vec<(AccountId, Vec<LockupClaim>)> {
+        let account_ids: HashSet<AccountId> = self.lockups.iter().map(|l| l.account_id).collect();
+
+        account_ids
+            .iter()
+            .filter_map(|account_id| {
+                if let Some(order) = self.orders.get(account_id) {
+                    Some((account_id.clone(), order))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    fn get_total_orders_amount(&self) -> U128 {
+        self.get_orders()
+            .iter()
+            .flat_map(|(_, orders)| orders)
+            .map(|o| o.claim_amount.0)
+            .sum::<u128>()
+            .into()
+    }
+
+    fn get_total_unclaimed_amount(&self) -> U128 {
+        self.lockups
+            .iter()
+            .map(|l| l.schedule.total_balance() - l.claimed_balance.0)
+            .sum::<u128>()
+            .into()
     }
 }

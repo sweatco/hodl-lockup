@@ -9,7 +9,7 @@ use crate::{
 
 pub trait OrderApi {
     fn reset_execution_status(&mut self);
-    fn get_orders(&self, account_id: AccountId) -> Vec<LockupClaim>;
+    fn get_orders_for_account(&self, account_id: AccountId) -> Vec<LockupClaim>;
     /// `percentage` is given with 2 decimal places (e.g., 1550 for 15.50%)
     fn authorize(
         &mut self,

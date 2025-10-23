@@ -18,7 +18,7 @@ impl OrderApi for Contract {
         self.is_executing = false;
     }
 
-    fn get_orders(&self, account_id: AccountId) -> Vec<LockupClaim> {
+    fn get_orders_for_account(&self, account_id: AccountId) -> Vec<LockupClaim> {
         self.orders.get(&account_id).unwrap_or_default()
     }
 

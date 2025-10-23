@@ -10,7 +10,7 @@
       "compiler": "rustc 1.85.0",
       "builder": "cargo-near cargo-near-build 0.9.0"
     },
-    "wasm_hash": "HafxAmqexuYgFoiPjrXDn62PhhzKoYYCEwbV8DFw7vjX"
+    "wasm_hash": "8ACHhjXvQkRRkLLKBU5YijEVQotFHuiu3c7Uwv58mvus"
   },
   "body": {
     "functions": [
@@ -497,6 +497,32 @@
       {
         "name": "get_orders",
         "kind": "view",
+        "result": {
+          "serialization_type": "json",
+          "type_schema": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/definitions/AccountId"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/LockupClaim"
+                  }
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          }
+        }
+      },
+      {
+        "name": "get_orders_for_account",
+        "kind": "view",
         "params": {
           "serialization_type": "json",
           "args": [
@@ -525,6 +551,26 @@
           "serialization_type": "json",
           "type_schema": {
             "$ref": "#/definitions/AccountId"
+          }
+        }
+      },
+      {
+        "name": "get_total_orders_amount",
+        "kind": "view",
+        "result": {
+          "serialization_type": "json",
+          "type_schema": {
+            "type": "string"
+          }
+        }
+      },
+      {
+        "name": "get_total_unclaimed_amount",
+        "kind": "view",
+        "result": {
+          "serialization_type": "json",
+          "type_schema": {
+            "type": "string"
           }
         }
       },

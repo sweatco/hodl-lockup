@@ -69,4 +69,10 @@ pub trait LockupViewApi {
     fn get_deposit_whitelist(&self) -> Vec<AccountId>;
 
     fn get_version(&self) -> String;
+
+    fn get_orders(&self) -> Vec<(AccountId, Vec<LockupClaim>)>;
+
+    fn get_total_orders_amount(&self) -> U128;
+
+    fn get_total_unclaimed_amount(&self) -> U128;
 }
