@@ -1,13 +1,10 @@
 use hodl_model::{
     api::LockupViewApi,
-    draft::{DraftGroupIndex, DraftGroupView, DraftIndex, DraftView},
     lockup::{LockupIndex, LockupView},
-    schedule::Schedule,
-    WrappedBalance,
 };
 use near_sdk::near;
 
-use crate::{AccountId, Base58CryptoHash, Contract, ContractExt, Into, VERSION};
+use crate::{AccountId, Contract, ContractExt, Into, VERSION};
 
 #[near]
 impl LockupViewApi for Contract {
@@ -51,74 +48,6 @@ impl LockupViewApi for Contract {
 
     fn get_deposit_whitelist(&self) -> Vec<AccountId> {
         self.deposit_whitelist.to_vec()
-    }
-
-    fn get_draft_operators_whitelist(&self) -> Vec<AccountId> {
-        self.draft_operators_whitelist.to_vec()
-    }
-
-    fn hash_schedule(&self, schedule: Schedule) -> Base58CryptoHash {
-        schedule.hash().into()
-    }
-
-    fn validate_schedule(
-        &self,
-        schedule: Schedule,
-        total_balance: WrappedBalance,
-        termination_schedule: Option<Schedule>,
-    ) {
-        schedule.assert_valid(total_balance.0);
-        if let Some(termination_schedule) = termination_schedule {
-            termination_schedule.assert_valid(total_balance.0);
-            schedule.assert_valid_termination_schedule(&termination_schedule);
-        }
-    }
-
-    fn get_next_draft_group_id(&self) -> DraftGroupIndex {
-        self.next_draft_group_id
-    }
-
-    fn get_next_draft_id(&self) -> DraftGroupIndex {
-        self.next_draft_id
-    }
-
-    fn get_num_draft_groups(&self) -> u32 {
-        self.draft_groups.len().try_into().unwrap()
-    }
-
-    fn get_draft_group(&self, index: DraftGroupIndex) -> Option<DraftGroupView> {
-        self.draft_groups.get(&index as _).map(Into::into)
-    }
-
-    fn get_draft_groups_paged(
-        &self,
-        // not the draft_id, but internal index used inside the LookupMap struct
-        from_index: Option<DraftGroupIndex>,
-        to_index: Option<DraftGroupIndex>,
-    ) -> Vec<(DraftGroupIndex, DraftGroupView)> {
-        let from_index = from_index.unwrap_or(0);
-        let to_index = to_index.unwrap_or(self.draft_groups.len().try_into().unwrap());
-        let keys = self.draft_groups.keys_as_vector();
-        let values = self.draft_groups.values_as_vector();
-        (from_index..std::cmp::min(self.next_draft_group_id as _, to_index))
-            .map(|index| {
-                (
-                    keys.get(u64::from(index)).unwrap(),
-                    values.get(u64::from(index)).unwrap().into(),
-                )
-            })
-            .collect()
-    }
-
-    fn get_draft(&self, index: DraftIndex) -> Option<DraftView> {
-        self.drafts.get(&index as _).map(Into::into)
-    }
-
-    fn get_drafts(&self, indices: Vec<DraftIndex>) -> Vec<(DraftIndex, DraftView)> {
-        indices
-            .into_iter()
-            .filter_map(|index| self.get_draft(index).map(|draft| (index, draft)))
-            .collect()
     }
 
     fn get_version(&self) -> String {

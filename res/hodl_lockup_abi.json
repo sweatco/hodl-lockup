@@ -10,7 +10,7 @@
       "compiler": "rustc 1.85.0",
       "builder": "cargo-near cargo-near-build 0.9.0"
     },
-    "wasm_hash": "HQMdub13nsmsBCSR5UWzpzgyzwr6CJQKpj2RpAzmE63U"
+    "wasm_hash": "HafxAmqexuYgFoiPjrXDn62PhhzKoYYCEwbV8DFw7vjX"
   },
   "body": {
     "functions": [
@@ -43,27 +43,6 @@
                   "array",
                   "null"
                 ],
-                "items": {
-                  "$ref": "#/definitions/AccountId"
-                }
-              }
-            }
-          ]
-        }
-      },
-      {
-        "name": "add_to_draft_operators_whitelist",
-        "kind": "call",
-        "modifiers": [
-          "payable"
-        ],
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "account_ids",
-              "type_schema": {
-                "type": "array",
                 "items": {
                   "$ref": "#/definitions/AccountId"
                 }
@@ -268,31 +247,6 @@
         }
       },
       {
-        "name": "convert_draft",
-        "kind": "call",
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "draft_id",
-              "type_schema": {
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0.0
-              }
-            }
-          ]
-        },
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0.0
-          }
-        }
-      },
-      {
         "name": "convert_drafts",
         "kind": "call",
         "params": {
@@ -321,107 +275,6 @@
               "minimum": 0.0
             }
           }
-        }
-      },
-      {
-        "name": "create_draft",
-        "kind": "call",
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "draft",
-              "type_schema": {
-                "$ref": "#/definitions/Draft"
-              }
-            }
-          ]
-        },
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0.0
-          }
-        }
-      },
-      {
-        "name": "create_draft_group",
-        "kind": "call",
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0.0
-          }
-        }
-      },
-      {
-        "name": "create_drafts",
-        "kind": "call",
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "drafts",
-              "type_schema": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/Draft"
-                }
-              }
-            }
-          ]
-        },
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint32",
-              "minimum": 0.0
-            }
-          }
-        }
-      },
-      {
-        "name": "delete_drafts",
-        "kind": "call",
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "draft_ids",
-              "type_schema": {
-                "type": "array",
-                "items": {
-                  "type": "integer",
-                  "format": "uint32",
-                  "minimum": 0.0
-                }
-              }
-            }
-          ]
-        }
-      },
-      {
-        "name": "discard_draft_group",
-        "kind": "call",
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "draft_group_id",
-              "type_schema": {
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0.0
-              }
-            }
-          ]
         }
       },
       {
@@ -502,172 +355,6 @@
             "type": "array",
             "items": {
               "$ref": "#/definitions/AccountId"
-            }
-          }
-        }
-      },
-      {
-        "name": "get_draft",
-        "kind": "view",
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "index",
-              "type_schema": {
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0.0
-              }
-            }
-          ]
-        },
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/DraftView"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
-      {
-        "name": "get_draft_group",
-        "kind": "view",
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "index",
-              "type_schema": {
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0.0
-              }
-            }
-          ]
-        },
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/DraftGroupView"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
-      {
-        "name": "get_draft_groups_paged",
-        "kind": "view",
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "from_index",
-              "type_schema": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint32",
-                "minimum": 0.0
-              }
-            },
-            {
-              "name": "to_index",
-              "type_schema": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "uint32",
-                "minimum": 0.0
-              }
-            }
-          ]
-        },
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "type": "integer",
-                  "format": "uint32",
-                  "minimum": 0.0
-                },
-                {
-                  "$ref": "#/definitions/DraftGroupView"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
-          }
-        }
-      },
-      {
-        "name": "get_draft_operators_whitelist",
-        "kind": "view",
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/AccountId"
-            }
-          }
-        }
-      },
-      {
-        "name": "get_drafts",
-        "kind": "view",
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "indices",
-              "type_schema": {
-                "type": "array",
-                "items": {
-                  "type": "integer",
-                  "format": "uint32",
-                  "minimum": 0.0
-                }
-              }
-            }
-          ]
-        },
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "type": "integer",
-                  "format": "uint32",
-                  "minimum": 0.0
-                },
-                {
-                  "$ref": "#/definitions/DraftView"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
             }
           }
         }
@@ -796,42 +483,6 @@
         }
       },
       {
-        "name": "get_next_draft_group_id",
-        "kind": "view",
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0.0
-          }
-        }
-      },
-      {
-        "name": "get_next_draft_id",
-        "kind": "view",
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0.0
-          }
-        }
-      },
-      {
-        "name": "get_num_draft_groups",
-        "kind": "view",
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0.0
-          }
-        }
-      },
-      {
         "name": "get_num_lockups",
         "kind": "view",
         "result": {
@@ -880,27 +531,6 @@
       {
         "name": "get_version",
         "kind": "view",
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "string"
-          }
-        }
-      },
-      {
-        "name": "hash_schedule",
-        "kind": "view",
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "schedule",
-              "type_schema": {
-                "$ref": "#/definitions/Schedule"
-              }
-            }
-          ]
-        },
         "result": {
           "serialization_type": "json",
           "type_schema": {
@@ -1079,27 +709,6 @@
         }
       },
       {
-        "name": "remove_from_draft_operators_whitelist",
-        "kind": "call",
-        "modifiers": [
-          "payable"
-        ],
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "account_ids",
-              "type_schema": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/AccountId"
-                }
-              }
-            }
-          ]
-        }
-      },
-      {
         "name": "reset_execution_status",
         "kind": "call"
       },
@@ -1237,40 +846,6 @@
             "$ref": "#/definitions/Promise"
           }
         }
-      },
-      {
-        "name": "validate_schedule",
-        "kind": "view",
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "schedule",
-              "type_schema": {
-                "$ref": "#/definitions/Schedule"
-              }
-            },
-            {
-              "name": "total_balance",
-              "type_schema": {
-                "type": "string"
-              }
-            },
-            {
-              "name": "termination_schedule",
-              "type_schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/definitions/Schedule"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            }
-          ]
-        }
       }
     ],
     "root_schema": {
@@ -1300,78 +875,6 @@
             }
           }
         },
-        "Draft": {
-          "type": "object",
-          "required": [
-            "draft_group_id",
-            "lockup_create"
-          ],
-          "properties": {
-            "draft_group_id": {
-              "type": "integer",
-              "format": "uint32",
-              "minimum": 0.0
-            },
-            "lockup_create": {
-              "$ref": "#/definitions/LockupCreate"
-            }
-          }
-        },
-        "DraftGroupView": {
-          "type": "object",
-          "required": [
-            "discarded",
-            "draft_indices",
-            "funded",
-            "total_amount"
-          ],
-          "properties": {
-            "discarded": {
-              "type": "boolean"
-            },
-            "draft_indices": {
-              "type": "array",
-              "items": {
-                "type": "integer",
-                "format": "uint32",
-                "minimum": 0.0
-              }
-            },
-            "funded": {
-              "type": "boolean"
-            },
-            "payer_id": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/AccountId"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "total_amount": {
-              "type": "string"
-            }
-          }
-        },
-        "DraftView": {
-          "type": "object",
-          "required": [
-            "draft_group_id",
-            "lockup_create"
-          ],
-          "properties": {
-            "draft_group_id": {
-              "type": "integer",
-              "format": "uint32",
-              "minimum": 0.0
-            },
-            "lockup_create": {
-              "$ref": "#/definitions/LockupCreateView"
-            }
-          }
-        },
         "LockupClaim": {
           "type": "object",
           "required": [
@@ -1390,75 +893,6 @@
             },
             "is_final": {
               "type": "boolean"
-            }
-          }
-        },
-        "LockupCreate": {
-          "type": "object",
-          "required": [
-            "account_id",
-            "schedule"
-          ],
-          "properties": {
-            "account_id": {
-              "$ref": "#/definitions/AccountId"
-            },
-            "schedule": {
-              "$ref": "#/definitions/Schedule"
-            },
-            "vesting_schedule": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/VestingConditions"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          }
-        },
-        "LockupCreateView": {
-          "type": "object",
-          "required": [
-            "account_id",
-            "claimed_balance",
-            "schedule",
-            "timestamp",
-            "total_balance",
-            "unclaimed_balance"
-          ],
-          "properties": {
-            "account_id": {
-              "$ref": "#/definitions/AccountId"
-            },
-            "claimed_balance": {
-              "type": "string"
-            },
-            "schedule": {
-              "$ref": "#/definitions/Schedule"
-            },
-            "timestamp": {
-              "description": "The current timestamp",
-              "type": "integer",
-              "format": "uint32",
-              "minimum": 0.0
-            },
-            "total_balance": {
-              "type": "string"
-            },
-            "unclaimed_balance": {
-              "type": "string"
-            },
-            "vesting_schedule": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/VestingConditions"
-                },
-                {
-                  "type": "null"
-                }
-              ]
             }
           }
         },
