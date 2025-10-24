@@ -268,11 +268,17 @@ impl LockupApi for Contract {
 
         // 2. Find a corresponding Order
         let mut orders = self.orders.get(&lockup.account_id).unwrap_or_default();
-        let order = orders.iter().find(|o| o.index == lockup_index);
+        let order_position = orders.iter().position(|o| o.index == lockup_index);
+        let mut original_claim_amount = 0;
 
         // 3. Revert claimed amount (lockup.claimed_amount -= order.amount)
-        if let Some(order) = order {
-            lockup.claimed_balance.0 -= order.claim_amount.0;
+        if let Some(position) = order_position {
+            original_claim_amount = orders[position].claim_amount.0;
+            lockup.claimed_balance.0 = lockup
+                .claimed_balance
+                .0
+                .checked_sub(original_claim_amount)
+                .expect("Order claim exceeds lockup claimed balance");
         }
 
         // 4. Terminate the Lockup
@@ -281,19 +287,24 @@ impl LockupApi for Contract {
         // 5. Adjust the Order:
         //      - if lockup.claimed_amount + order.amount <= lockup.total_amount -> leave it as is
         //      - else -> order.amount = lockup.total_amount - lockup.claimed_amount
-        if let Some(order) = order {
+        if let Some(position) = order_position {
             let total_balance = lockup.schedule.total_balance();
-            let adjuster_order_amount = if lockup.claimed_balance.0 + order.claim_amount.0 > total_balance {
-                total_balance - lockup.claimed_balance.0
+            let adjusted_order_amount = if lockup.claimed_balance.0 + original_claim_amount > total_balance {
+                total_balance.saturating_sub(lockup.claimed_balance.0)
             } else {
-                order.claim_amount.0
+                original_claim_amount
             };
 
-            orders
-                .iter_mut()
-                .find(|o| o.index == lockup_index)
-                .unwrap_or_else(|| panic_str("Order is not found"))
-                .claim_amount = adjuster_order_amount.into();
+            let order = orders
+                .get_mut(position)
+                .unwrap_or_else(|| panic_str("Order is not found"));
+            order.claim_amount = adjusted_order_amount.into();
+            lockup.claimed_balance.0 = lockup
+                .claimed_balance
+                .0
+                .checked_add(adjusted_order_amount)
+                .expect("Adjusting order overflowed claimed balance");
+            order.is_final = lockup.schedule.total_balance() == lockup.claimed_balance.0;
 
             self.orders.insert(&lockup.account_id, &orders);
         }
@@ -543,6 +554,7 @@ mod tests {
         let stored_orders = contract.orders.get(&account).unwrap();
         assert_eq!(stored_orders.len(), 1);
         assert_eq!(stored_orders[0].claim_amount.0, claim_amount);
+        assert!(!stored_orders[0].is_final);
 
         let stored_lockup = contract.lockups.get(u64::from(lockup_index)).unwrap();
         assert_eq!(stored_lockup.schedule.total_balance(), 800_000);
@@ -586,6 +598,7 @@ mod tests {
         let stored_orders = contract.orders.get(&account).unwrap();
         assert_eq!(stored_orders.len(), 1);
         assert_eq!(stored_orders[0].claim_amount.0, 600_000);
+        assert!(stored_orders[0].is_final);
 
         let stored_lockup = contract.lockups.get(u64::from(lockup_index)).unwrap();
         assert_eq!(stored_lockup.schedule.total_balance(), 600_000);
@@ -629,6 +642,7 @@ mod tests {
         let stored_orders = contract.orders.get(&account).unwrap();
         assert_eq!(stored_orders.len(), 1);
         assert_eq!(stored_orders[0].claim_amount.0, 0);
+        assert!(stored_orders[0].is_final);
 
         assert!(contract.account_lockups.get(&account).is_none());
     }
@@ -688,15 +702,71 @@ mod tests {
 
         let primary_order = stored_orders.iter().find(|o| o.index == primary_index).unwrap();
         assert_eq!(primary_order.claim_amount.0, 400_000);
+        assert!(primary_order.is_final);
 
         let secondary_order = stored_orders.iter().find(|o| o.index == secondary_index).unwrap();
         assert_eq!(secondary_order.claim_amount.0, secondary_claim);
+        assert!(!secondary_order.is_final);
 
         let stored_primary = contract.lockups.get(u64::from(primary_index)).unwrap();
         assert_eq!(stored_primary.schedule.total_balance(), 400_000);
 
         let stored_secondary = contract.lockups.get(u64::from(secondary_index)).unwrap();
         assert_eq!(stored_secondary.schedule.total_balance(), 500_000);
+    }
+
+    #[test]
+    fn test_terminate_subsequent_lockup_does_not_double_existing_order() {
+        let manager = manager();
+        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+
+        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+
+        let account = alice();
+        let finish_timestamp = GENESIS_TIMESTAMP_SEC + 10;
+
+        let first_index = contract.internal_add_lockup(&sample_lockup(account.clone(), 1_000_000, 0, finish_timestamp));
+
+        set_context(&account, 0, GENESIS_TIMESTAMP_SEC + 2);
+        contract.claim(Some(vec![(first_index, Some(900_000u128.into()))]));
+
+        let orders = contract.orders.get(&account).unwrap();
+        assert_eq!(orders.len(), 1);
+        assert_eq!(orders[0].claim_amount.0, 900_000);
+        assert!(!orders[0].is_final);
+
+        set_context(&manager, 1, GENESIS_TIMESTAMP_SEC + 6);
+        contract.terminate(first_index, None, Some(GENESIS_TIMESTAMP_SEC + 6));
+
+        let orders = contract.orders.get(&account).unwrap();
+        let first_order = orders.iter().find(|o| o.index == first_index).unwrap();
+        assert_eq!(first_order.claim_amount.0, 600_000);
+        assert!(first_order.is_final);
+
+        let second_index = contract.internal_add_lockup(&sample_lockup(account.clone(), 200_000, 0, finish_timestamp));
+
+        set_context(&account, 0, GENESIS_TIMESTAMP_SEC + 7);
+        contract.claim(Some(vec![(second_index, Some(50_000u128.into()))]));
+
+        let orders = contract.orders.get(&account).unwrap();
+        assert_eq!(orders.len(), 2);
+        let first_order = orders.iter().find(|o| o.index == first_index).unwrap();
+        assert_eq!(first_order.claim_amount.0, 600_000);
+        assert!(first_order.is_final);
+        let second_order = orders.iter().find(|o| o.index == second_index).unwrap();
+        assert_eq!(second_order.claim_amount.0, 50_000);
+        assert!(!second_order.is_final);
+
+        set_context(&manager, 1, GENESIS_TIMESTAMP_SEC + 9);
+        contract.terminate(second_index, None, Some(GENESIS_TIMESTAMP_SEC + 9));
+
+        let orders = contract.orders.get(&account).unwrap();
+        let first_order = orders.iter().find(|o| o.index == first_index).unwrap();
+        assert_eq!(first_order.claim_amount.0, 600_000);
+        assert!(first_order.is_final);
+        let second_order = orders.iter().find(|o| o.index == second_index).unwrap();
+        assert_eq!(second_order.claim_amount.0, 50_000);
+        assert!(!second_order.is_final);
     }
 
     #[test]
