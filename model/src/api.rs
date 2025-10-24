@@ -40,7 +40,7 @@ pub trait LockupApi {
         lockup_index: LockupIndex,
         hashed_schedule: Option<Schedule>,
         termination_timestamp: Option<TimestampSec>,
-    ) -> PromiseOrValue<WrappedBalance>;
+    ) -> WrappedBalance;
 
     // preserving both options for API compatibility
     fn add_to_deposit_whitelist(&mut self, account_id: Option<AccountId>, account_ids: Option<Vec<AccountId>>);

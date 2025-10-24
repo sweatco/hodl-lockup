@@ -254,33 +254,55 @@ impl LockupApi for Contract {
     fn terminate(
         &mut self,
         lockup_index: LockupIndex,
-        hashed_schedule: Option<Schedule>,
+        _hashed_schedule: Option<Schedule>,
         termination_timestamp: Option<TimestampSec>,
-    ) -> PromiseOrValue<WrappedBalance> {
+    ) -> WrappedBalance {
         assert_one_yocto();
         self.assert_deposit_whitelist(&env::predecessor_account_id());
 
-        let mut lockup = self.lockups.get(u64::from(lockup_index)).expect("Lockup not found");
-        if lockup.termination_config.is_none() {
-            lockup.termination_config = Some(TerminationConfig {
-                beneficiary_id: AccountId::from_str(DEFAULT_BENEFICIARY_ID)
-                    .unwrap_or_else(|_| panic_str("Failed to parse account id")),
-                vesting_schedule: VestingConditions::SameAsLockupSchedule,
-            });
-        }
-
         let current_timestamp = current_timestamp_sec();
         let termination_timestamp = termination_timestamp.unwrap_or(current_timestamp);
-        let (unvested_balance, beneficiary_id) = lockup.terminate(hashed_schedule, termination_timestamp);
-        self.lockups.replace(u64::from(lockup_index), &lockup);
 
-        // no need to store empty lockup
-        if lockup.schedule.total_balance() == 0 {
-            let mut indices = self.account_lockups.get(&lockup.account_id).unwrap_or_default();
-            indices.remove(&lockup_index);
-            self.internal_save_account_lockups(&lockup.account_id, indices);
+        // 1. Find a Lockup
+        let mut lockup = self.lockups.get(u64::from(lockup_index)).expect("Lockup not found");
+
+        // 2. Find a corresponding Order
+        let mut orders = self.orders.get(&lockup.account_id).unwrap_or_default();
+        let order = orders.iter().find(|o| o.index == lockup_index);
+
+        // 3. Revert claimed amount (lockup.claimed_amount -= order.amount)
+        if let Some(order) = order {
+            lockup.claimed_balance.0 -= order.claim_amount.0;
         }
 
+        // 4. Terminate the Lockup
+        let unvested_balance = lockup.terminate(termination_timestamp);
+
+        // 5. Adjust the Order:
+        //      - if lockup.claimed_amount + order.amount <= lockup.total_amount -> leave it as is
+        //      - else -> order.amount = lockup.total_amount - lockup.claimed_amount
+        if let Some(order) = order {
+            let total_balance = lockup.schedule.total_balance();
+            let adjuster_order_amount = if lockup.claimed_balance.0 + order.claim_amount.0 > total_balance {
+                total_balance - lockup.claimed_balance.0
+            } else {
+                order.claim_amount.0
+            };
+
+            orders
+                .iter_mut()
+                .find(|o| o.index == lockup_index)
+                .unwrap_or_else(|| panic_str("Order is not found"))
+                .claim_amount = adjuster_order_amount.into();
+        }
+
+        // 6. Clean up
+        self.lockups.replace(u64::from(lockup_index), &lockup);
+        if lockup.schedule.total_balance() == 0 {
+            self.remove_lockup(lockup_index);
+        }
+
+        // 7. Emit an Evnt
         let event = FtLockupTerminateLockup {
             id: lockup_index,
             termination_timestamp,
@@ -288,22 +310,7 @@ impl LockupApi for Contract {
         };
         emit(EventKind::FtLockupTerminateLockup(vec![event]));
 
-        if unvested_balance > 0 {
-            Promise::new(self.token_account_id.clone())
-                .ft_transfer(
-                    &beneficiary_id.clone(),
-                    unvested_balance,
-                    Some(format!("Terminated lockup #{lockup_index}")),
-                )
-                .then(
-                    ext_self::ext(env::current_account_id())
-                        .with_static_gas(GAS_FOR_AFTER_FT_TRANSFER)
-                        .after_lockup_termination(beneficiary_id, unvested_balance.into()),
-                )
-                .into()
-        } else {
-            PromiseOrValue::Value(0.into())
-        }
+        unvested_balance.into()
     }
 
     // preserving both options for API compatibility
@@ -348,6 +355,19 @@ impl LockupApi for Contract {
                 account_ids: account_ids.into_iter().map(Into::into).collect(),
             },
         ));
+    }
+}
+
+impl Contract {
+    pub(crate) fn remove_lockup(&mut self, lockup_index: u32) {
+        let lockup = self
+            .lockups
+            .get(lockup_index as u64)
+            .unwrap_or_else(|| panic_str("Cannot find lockup"));
+
+        let mut indices = self.account_lockups.get(&lockup.account_id).unwrap_or_default();
+        indices.remove(&lockup_index);
+        self.internal_save_account_lockups(&lockup.account_id, indices);
     }
 }
 
@@ -456,11 +476,10 @@ mod tests {
         // The new termination_timestamp will be calculated via `lockup_schedule.get_vesting_timestamp_for_amount(0)`,
         // which corresponds to GENESIS_TIMESTAMP_SEC.
 
-        let (unvested_balance, beneficiary_id) = lockup.terminate(None, termination_timestamp);
+        let unvested_balance = lockup.terminate(termination_timestamp);
 
         // unvested = total - new_vested = 1,000,000 - 375_000 = 625_000
         assert_eq!(unvested_balance, 625_000);
-        assert_eq!(beneficiary_id, beneficiary());
 
         // Check the lockup state after termination
         // The schedule should be terminated with the new values.
@@ -511,11 +530,10 @@ mod tests {
         let vested_balance = lockup.schedule.unlocked_balance(termination_timestamp);
         assert_eq!(vested_balance, 2_500_000);
 
-        let (unvested_balance, beneficiary_id) = lockup.terminate(None, termination_timestamp);
+        let unvested_balance = lockup.terminate(termination_timestamp);
 
         // unvested = total - vested = 15,000,000 - 2,500,000 = 12,500,000
         assert_eq!(unvested_balance, 12_500_000);
-        assert_eq!(beneficiary_id, beneficiary());
 
         // Check the lockup state after termination
         assert_eq!(lockup.schedule.total_balance(), vested_balance);
@@ -560,11 +578,10 @@ mod tests {
         assert_eq!(vested_balance, 0);
 
         // Since claimed_balance is 0, no special adjustment should happen.
-        let (unvested_balance, beneficiary_id) = lockup.terminate(None, termination_timestamp);
+        let unvested_balance = lockup.terminate(termination_timestamp);
 
         // unvested = total - vested = 35,000,000 - 0 = 35,000,000
         assert_eq!(unvested_balance, 35_000_000);
-        assert_eq!(beneficiary_id, beneficiary());
 
         // Check the lockup state after termination
         assert_eq!(lockup.schedule.total_balance(), vested_balance);

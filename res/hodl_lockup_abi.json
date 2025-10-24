@@ -10,7 +10,7 @@
       "compiler": "rustc 1.85.0",
       "builder": "cargo-near cargo-near-build 0.9.0"
     },
-    "wasm_hash": "8ACHhjXvQkRRkLLKBU5YijEVQotFHuiu3c7Uwv58mvus"
+    "wasm_hash": "AgzmvZQhN8H1Er435o1DGtYw4jLisbHPXt78dCxvX1h7"
   },
   "body": {
     "functions": [
@@ -793,7 +793,7 @@
               }
             },
             {
-              "name": "hashed_schedule",
+              "name": "_hashed_schedule",
               "type_schema": {
                 "anyOf": [
                   {
@@ -821,7 +821,7 @@
         "result": {
           "serialization_type": "json",
           "type_schema": {
-            "$ref": "#/definitions/PromiseOrValueString"
+            "type": "string"
           }
         }
       },
