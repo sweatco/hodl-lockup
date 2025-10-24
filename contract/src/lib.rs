@@ -294,6 +294,8 @@ impl LockupApi for Contract {
                 .find(|o| o.index == lockup_index)
                 .unwrap_or_else(|| panic_str("Order is not found"))
                 .claim_amount = adjuster_order_amount.into();
+
+            self.orders.insert(&lockup.account_id, &orders);
         }
 
         // 6. Clean up
@@ -397,12 +399,14 @@ impl FtTransferPromise for Promise {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::str::FromStr;
 
     use hodl_model::{
-        lockup::Lockup,
+        lockup::{Lockup, LockupClaim},
         schedule::{Checkpoint, Schedule},
         termination::{TerminationConfig, VestingConditions},
+        TimestampSec,
     };
     use near_sdk::{test_utils::VMContextBuilder, testing_env, AccountId};
 
@@ -415,6 +419,284 @@ mod tests {
 
     fn beneficiary() -> AccountId {
         AccountId::from_str("beneficiary.near").unwrap()
+    }
+
+    fn manager() -> AccountId {
+        AccountId::from_str("manager.near").unwrap()
+    }
+
+    fn contract_account() -> AccountId {
+        AccountId::from_str("contract.near").unwrap()
+    }
+
+    fn token_account() -> AccountId {
+        AccountId::from_str("token.near").unwrap()
+    }
+
+    fn to_nanos(timestamp_sec: TimestampSec) -> u64 {
+        (timestamp_sec as u64) * 1_000_000_000
+    }
+
+    fn set_context(predecessor: &AccountId, attached_deposit: u128, timestamp_sec: TimestampSec) {
+        let mut builder = VMContextBuilder::new();
+        builder.current_account_id(contract_account());
+        builder.predecessor_account_id(predecessor.clone());
+        builder.signer_account_id(predecessor.clone());
+        builder.attached_deposit(NearToken::from_yoctonear(attached_deposit));
+        builder.account_balance(NearToken::from_yoctonear(10u128.pow(26)));
+        builder.block_timestamp(to_nanos(timestamp_sec));
+        testing_env!(builder.build());
+    }
+
+    fn sample_lockup(
+        account_id: AccountId,
+        total_balance: u128,
+        claimed_balance: u128,
+        finish_timestamp: TimestampSec,
+    ) -> Lockup {
+        let schedule = Schedule(vec![
+            Checkpoint {
+                timestamp: GENESIS_TIMESTAMP_SEC,
+                balance: 0.into(),
+            },
+            Checkpoint {
+                timestamp: finish_timestamp,
+                balance: total_balance.into(),
+            },
+        ]);
+
+        Lockup {
+            account_id,
+            schedule,
+            claimed_balance: claimed_balance.into(),
+            termination_config: Some(TerminationConfig {
+                beneficiary_id: beneficiary(),
+                vesting_schedule: VestingConditions::SameAsLockupSchedule,
+            }),
+        }
+    }
+
+    #[test]
+    fn test_terminate_without_orders_leaves_lockup_state() {
+        let manager = manager();
+        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+
+        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+
+        let account = alice();
+        let total_balance = 1_000_000;
+        let finish_timestamp = GENESIS_TIMESTAMP_SEC + 10;
+        let lockup_index =
+            contract.internal_add_lockup(&sample_lockup(account.clone(), total_balance, 0, finish_timestamp));
+
+        let termination_timestamp = GENESIS_TIMESTAMP_SEC + 5;
+        set_context(&manager, 1, termination_timestamp);
+
+        let unvested = contract.terminate(lockup_index, None, Some(termination_timestamp)).0;
+
+        assert_eq!(unvested, 500_000);
+
+        let stored_lockup = contract.lockups.get(u64::from(lockup_index)).unwrap();
+        assert_eq!(stored_lockup.schedule.total_balance(), 500_000);
+        assert_eq!(stored_lockup.claimed_balance.0, 0);
+        assert!(contract.orders.get(&account).is_none());
+
+        let indices = contract.account_lockups.get(&account).unwrap();
+        assert!(indices.contains(&lockup_index));
+    }
+
+    #[test]
+    fn test_terminate_preserves_order_when_within_total() {
+        let manager = manager();
+        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+
+        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+
+        let account = alice();
+        let total_balance = 1_000_000;
+        let claim_amount = 200_000;
+        let finish_timestamp = GENESIS_TIMESTAMP_SEC + 10;
+
+        let lockup_index = contract.internal_add_lockup(&sample_lockup(
+            account.clone(),
+            total_balance,
+            claim_amount,
+            finish_timestamp,
+        ));
+
+        contract.orders.insert(
+            &account,
+            &vec![LockupClaim {
+                index: lockup_index,
+                claim_amount: claim_amount.into(),
+                is_final: false,
+            }],
+        );
+
+        let termination_timestamp = GENESIS_TIMESTAMP_SEC + 8;
+        set_context(&manager, 1, termination_timestamp);
+
+        let unvested = contract.terminate(lockup_index, None, Some(termination_timestamp)).0;
+
+        assert_eq!(unvested, 200_000);
+
+        let stored_orders = contract.orders.get(&account).unwrap();
+        assert_eq!(stored_orders.len(), 1);
+        assert_eq!(stored_orders[0].claim_amount.0, claim_amount);
+
+        let stored_lockup = contract.lockups.get(u64::from(lockup_index)).unwrap();
+        assert_eq!(stored_lockup.schedule.total_balance(), 800_000);
+    }
+
+    #[test]
+    fn test_terminate_trims_order_to_remaining_total() {
+        let manager = manager();
+        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+
+        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+
+        let account = alice();
+        let total_balance = 1_000_000;
+        let claim_amount = 900_000;
+        let finish_timestamp = GENESIS_TIMESTAMP_SEC + 10;
+
+        let lockup_index = contract.internal_add_lockup(&sample_lockup(
+            account.clone(),
+            total_balance,
+            claim_amount,
+            finish_timestamp,
+        ));
+
+        contract.orders.insert(
+            &account,
+            &vec![LockupClaim {
+                index: lockup_index,
+                claim_amount: claim_amount.into(),
+                is_final: false,
+            }],
+        );
+
+        let termination_timestamp = GENESIS_TIMESTAMP_SEC + 6;
+        set_context(&manager, 1, termination_timestamp);
+
+        let unvested = contract.terminate(lockup_index, None, Some(termination_timestamp)).0;
+
+        assert_eq!(unvested, 400_000);
+
+        let stored_orders = contract.orders.get(&account).unwrap();
+        assert_eq!(stored_orders.len(), 1);
+        assert_eq!(stored_orders[0].claim_amount.0, 600_000);
+
+        let stored_lockup = contract.lockups.get(u64::from(lockup_index)).unwrap();
+        assert_eq!(stored_lockup.schedule.total_balance(), 600_000);
+    }
+
+    #[test]
+    fn test_terminate_zeroes_order_and_removes_lockup_when_unvested() {
+        let manager = manager();
+        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+
+        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+
+        let account = alice();
+        let total_balance = 1_000_000;
+        let claim_amount = 300_000;
+        let finish_timestamp = GENESIS_TIMESTAMP_SEC + 10;
+
+        let lockup_index = contract.internal_add_lockup(&sample_lockup(
+            account.clone(),
+            total_balance,
+            claim_amount,
+            finish_timestamp,
+        ));
+
+        contract.orders.insert(
+            &account,
+            &vec![LockupClaim {
+                index: lockup_index,
+                claim_amount: claim_amount.into(),
+                is_final: false,
+            }],
+        );
+
+        let termination_timestamp = GENESIS_TIMESTAMP_SEC;
+        set_context(&manager, 1, termination_timestamp);
+
+        let unvested = contract.terminate(lockup_index, None, Some(termination_timestamp)).0;
+
+        assert_eq!(unvested, total_balance);
+
+        let stored_orders = contract.orders.get(&account).unwrap();
+        assert_eq!(stored_orders.len(), 1);
+        assert_eq!(stored_orders[0].claim_amount.0, 0);
+
+        assert!(contract.account_lockups.get(&account).is_none());
+    }
+
+    #[test]
+    fn test_terminate_updates_only_matching_order() {
+        let manager = manager();
+        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+
+        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+
+        let account = alice();
+        let finish_timestamp = GENESIS_TIMESTAMP_SEC + 10;
+
+        let primary_claim = 700_000;
+        let secondary_claim = 300_000;
+
+        let primary_index = contract.internal_add_lockup(&sample_lockup(
+            account.clone(),
+            1_000_000,
+            primary_claim,
+            finish_timestamp,
+        ));
+
+        let secondary_index = contract.internal_add_lockup(&sample_lockup(
+            account.clone(),
+            500_000,
+            secondary_claim,
+            finish_timestamp,
+        ));
+
+        contract.orders.insert(
+            &account,
+            &vec![
+                LockupClaim {
+                    index: primary_index,
+                    claim_amount: primary_claim.into(),
+                    is_final: false,
+                },
+                LockupClaim {
+                    index: secondary_index,
+                    claim_amount: secondary_claim.into(),
+                    is_final: false,
+                },
+            ],
+        );
+
+        let termination_timestamp = GENESIS_TIMESTAMP_SEC + 4;
+        set_context(&manager, 1, termination_timestamp);
+
+        let unvested = contract.terminate(primary_index, None, Some(termination_timestamp)).0;
+
+        assert_eq!(unvested, 600_000);
+
+        let stored_orders = contract.orders.get(&account).unwrap();
+        assert_eq!(stored_orders.len(), 2);
+
+        let primary_order = stored_orders.iter().find(|o| o.index == primary_index).unwrap();
+        assert_eq!(primary_order.claim_amount.0, 400_000);
+
+        let secondary_order = stored_orders.iter().find(|o| o.index == secondary_index).unwrap();
+        assert_eq!(secondary_order.claim_amount.0, secondary_claim);
+
+        let stored_primary = contract.lockups.get(u64::from(primary_index)).unwrap();
+        assert_eq!(stored_primary.schedule.total_balance(), 400_000);
+
+        let stored_secondary = contract.lockups.get(u64::from(secondary_index)).unwrap();
+        assert_eq!(stored_secondary.schedule.total_balance(), 500_000);
     }
 
     #[test]
