@@ -42,6 +42,8 @@ pub trait LockupApi {
         termination_timestamp: Option<TimestampSec>,
     ) -> WrappedBalance;
 
+    fn clear_accounts(&mut self, account_ids: Vec<AccountId>) -> U128;
+
     // preserving both options for API compatibility
     fn add_to_deposit_whitelist(&mut self, account_id: Option<AccountId>, account_ids: Option<Vec<AccountId>>);
 
