@@ -7,10 +7,10 @@
       "Sweat Economy"
     ],
     "build": {
-      "compiler": "rustc 1.85.0",
-      "builder": "cargo-near cargo-near-build 0.9.0"
+      "compiler": "rustc 1.85.1",
+      "builder": "cargo-near cargo-near-build 0.11.3"
     },
-    "wasm_hash": "FcTGrdEyTVA6hhfB6jWbAW22bvBNwSrnLb5cK5BQ5uEd"
+    "wasm_hash": "YCRJPz5V3TgGmARwiEdN4SE2ba8b763qwZqgRmfbJ4C"
   },
   "body": {
     "functions": [
@@ -229,6 +229,33 @@
             "items": {
               "$ref": "#/definitions/LockupClaim"
             }
+          }
+        }
+      },
+      {
+        "name": "clear_accounts",
+        "kind": "call",
+        "modifiers": [
+          "private"
+        ],
+        "params": {
+          "serialization_type": "json",
+          "args": [
+            {
+              "name": "account_ids",
+              "type_schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/AccountId"
+                }
+              }
+            }
+          ]
+        },
+        "result": {
+          "serialization_type": "json",
+          "type_schema": {
+            "type": "string"
           }
         }
       },

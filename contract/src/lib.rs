@@ -326,6 +326,7 @@ impl LockupApi for Contract {
         unvested_balance.into()
     }
 
+    #[private]
     fn clear_accounts(&mut self, account_ids: Vec<AccountId>) -> U128 {
         self.assert_deposit_whitelist(&env::predecessor_account_id());
         require!(
