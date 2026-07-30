@@ -7,10 +7,10 @@
       "Sweat Economy"
     ],
     "build": {
-      "compiler": "rustc 1.85.0",
-      "builder": "cargo-near cargo-near-build 0.4.4"
+      "compiler": "rustc 1.85.1",
+      "builder": "cargo-near cargo-near-build 0.11.3"
     },
-    "wasm_hash": "DitDaR9efuD8jhoM1r2ypxvKfbRPVYoQjN47LhruvAMs"
+    "wasm_hash": "6UWq71aRmferMNasHf6htrCQy42HJqwLFqpDTozULSaH"
   },
   "body": {
     "functions": [
@@ -229,33 +229,6 @@
             "items": {
               "$ref": "#/definitions/LockupClaim"
             }
-          }
-        }
-      },
-      {
-        "name": "clear_accounts",
-        "kind": "call",
-        "modifiers": [
-          "private"
-        ],
-        "params": {
-          "serialization_type": "json",
-          "args": [
-            {
-              "name": "account_ids",
-              "type_schema": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/AccountId"
-                }
-              }
-            }
-          ]
-        },
-        "result": {
-          "serialization_type": "json",
-          "type_schema": {
-            "type": "string"
           }
         }
       },
@@ -797,6 +770,37 @@
                 "type": "integer",
                 "format": "uint32",
                 "minimum": 0.0
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "set_accounts_total_balances",
+        "kind": "call",
+        "modifiers": [
+          "private"
+        ],
+        "params": {
+          "serialization_type": "json",
+          "args": [
+            {
+              "name": "accounts_and_balances",
+              "type_schema": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "$ref": "#/definitions/AccountId"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2
+                }
               }
             }
           ]

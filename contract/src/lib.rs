@@ -327,48 +327,41 @@ impl LockupApi for Contract {
     }
 
     #[private]
-    fn clear_accounts(&mut self, account_ids: Vec<AccountId>) -> U128 {
+    fn set_accounts_total_balances(&mut self, accounts_and_balances: Vec<(AccountId, U128)>) {
         self.assert_deposit_whitelist(&env::predecessor_account_id());
         require!(
             !self.is_executing,
-            "Cannot clear accounts while orders are being executed"
+            "Cannot set account balances while orders are being executed"
         );
+        let mut updated_accounts = HashSet::new();
 
-        let mut cleared_amount = 0u128;
-        let mut cleared_accounts = HashSet::new();
-
-        for account_id in account_ids {
-            if !cleared_accounts.insert(account_id.clone()) {
-                continue;
-            }
+        for (account_id, balance) in accounts_and_balances {
+            require!(updated_accounts.insert(account_id.clone()), "Duplicate account ID");
 
             let indices = self
                 .account_lockups
-                .remove(&account_id)
+                .get(&account_id)
                 .unwrap_or_else(|| panic_str(format!("Account {account_id} is not found!").as_str()));
 
             self.orders.remove(&account_id);
 
             for index in indices {
-                let lockup = self
+                let mut lockup = self
                     .lockups
                     .get(u64::from(index))
                     .unwrap_or_else(|| panic_str(format!("No lockup at index {index}!").as_str()));
-                cleared_amount = cleared_amount
-                    .checked_add(lockup.schedule.total_balance() - lockup.claimed_balance.0)
-                    .expect("Cleared lockups amount overflow");
+                let penultimate_balance = lockup.schedule.0[lockup.schedule.0.len() - 2].balance.0;
+                require!(
+                    balance.0 >= penultimate_balance,
+                    "Total balance cannot be less than the preceding schedule checkpoint"
+                );
 
-                // Vector indices are stable and cannot be removed individually. Preserve the
-                // claimed amount in a fully claimed tombstone after unlinking the account.
-                // Its total and claimed balances match, so it can never be claimed again.
-                let claimed_balance = lockup.claimed_balance.0;
-                let mut cleared_lockup = Lockup::new_unlocked(account_id.clone(), claimed_balance);
-                cleared_lockup.claimed_balance = claimed_balance.into();
-                self.lockups.replace(u64::from(index), &cleared_lockup);
+                // Preserve the lockup schedule and metadata; make it fully claimed at the supplied total.
+                lockup.schedule.0.last_mut().unwrap().balance = balance;
+                lockup.claimed_balance = balance;
+                self.lockups.replace(u64::from(index), &lockup);
             }
         }
-
-        cleared_amount.into()
     }
 
     // preserving both options for API compatibility
@@ -534,7 +527,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clear_accounts_removes_lockups_and_returns_unclaimed_amount() {
+    fn test_set_accounts_total_balances_makes_lockups_unclaimable_and_clears_orders() {
         let manager = manager();
         set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
 
@@ -568,10 +561,9 @@ mod tests {
             }],
         );
 
-        let cleared = contract.clear_accounts(vec![alice.clone(), alice.clone()]);
+        contract.set_accounts_total_balances(vec![(alice.clone(), 900_000.into())]);
 
-        assert_eq!(cleared.0, 750_000);
-        assert!(contract.account_lockups.get(&alice).is_none());
+        assert!(contract.account_lockups.get(&alice).is_some());
         assert!(contract.orders.get(&alice).is_none());
         assert_eq!(
             contract
@@ -580,11 +572,11 @@ mod tests {
                 .unwrap()
                 .schedule
                 .total_balance(),
-            250_000
+            900_000
         );
         assert_eq!(
             contract.lockups.get(u64::from(alice_first)).unwrap().claimed_balance.0,
-            250_000
+            900_000
         );
         assert_eq!(
             contract
@@ -593,11 +585,11 @@ mod tests {
                 .unwrap()
                 .schedule
                 .total_balance(),
-            400_000
+            900_000
         );
         assert_eq!(
             contract.lockups.get(u64::from(alice_second)).unwrap().claimed_balance.0,
-            400_000
+            900_000
         );
         assert_eq!(contract.get_total_unclaimed_amount().0, 500_000);
         assert!(contract
