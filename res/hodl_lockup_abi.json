@@ -7,10 +7,10 @@
       "Sweat Economy"
     ],
     "build": {
-      "compiler": "rustc 1.85.1",
-      "builder": "cargo-near cargo-near-build 0.11.3"
+      "compiler": "rustc 1.85.0",
+      "builder": "cargo-near cargo-near-build 0.4.4"
     },
-    "wasm_hash": "6UWq71aRmferMNasHf6htrCQy42HJqwLFqpDTozULSaH"
+    "wasm_hash": "HQgciZtwiogvjSbxisJa1Ukke21MAzcnDi6hm3KMBMX1"
   },
   "body": {
     "functions": [
