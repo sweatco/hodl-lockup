@@ -10,7 +10,7 @@
       "compiler": "rustc 1.85.0",
       "builder": "cargo-near cargo-near-build 0.4.4"
     },
-    "wasm_hash": "HQgciZtwiogvjSbxisJa1Ukke21MAzcnDi6hm3KMBMX1"
+    "wasm_hash": "3KAEGgNT6a5Bs3JDFpYQ71YtsMZCWxBf6EL3XGEkY3CM"
   },
   "body": {
     "functions": [
@@ -800,6 +800,42 @@
                   ],
                   "maxItems": 2,
                   "minItems": 2
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "set_lockups_claimed_balances",
+        "kind": "call",
+        "modifiers": [
+          "private"
+        ],
+        "params": {
+          "serialization_type": "json",
+          "args": [
+            {
+              "name": "lockups_claimed_balances",
+              "type_schema": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "type": "integer",
+                      "format": "uint32",
+                      "minimum": 0.0
+                    },
+                    {
+                      "$ref": "#/definitions/AccountId"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "maxItems": 3,
+                  "minItems": 3
                 }
               }
             }
