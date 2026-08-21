@@ -364,6 +364,32 @@ impl LockupApi for Contract {
         }
     }
 
+    #[private]
+    fn set_lockups_claimed_balances(&mut self, lockups_claimed_balances: Vec<(LockupIndex, AccountId, U128)>) {
+        self.assert_deposit_whitelist(&env::predecessor_account_id());
+        require!(
+            !self.is_executing,
+            "Cannot set claimed balances while orders are being executed"
+        );
+
+        for (index, account_id, claimed_balance) in lockups_claimed_balances {
+            let mut lockup = self
+                .lockups
+                .get(u64::from(index))
+                .unwrap_or_else(|| panic_str(format!("No lockup at index {index}!").as_str()));
+            if lockup.account_id != account_id {
+                panic_str(format!("Lockup {index} belongs to {}, not {account_id}", lockup.account_id).as_str());
+            }
+            require!(
+                claimed_balance.0 <= lockup.schedule.total_balance(),
+                "Claimed balance cannot exceed total balance"
+            );
+
+            lockup.claimed_balance = claimed_balance;
+            self.lockups.replace(u64::from(index), &lockup);
+        }
+    }
+
     // preserving both options for API compatibility
     #[payable]
     fn add_to_deposit_whitelist(&mut self, account_id: Option<AccountId>, account_ids: Option<Vec<AccountId>>) {
@@ -597,6 +623,84 @@ mod tests {
             .get(&beneficiary)
             .unwrap()
             .contains(&beneficiary_lockup));
+    }
+
+    #[test]
+    fn test_set_lockups_claimed_balances_updates_claimed_balance() {
+        let manager = manager();
+        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+
+        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+        let alice = alice();
+        let beneficiary = beneficiary();
+        let alice_lockup = contract.internal_add_lockup(&sample_lockup(
+            alice.clone(),
+            1_000_000,
+            250_000,
+            GENESIS_TIMESTAMP_SEC + 10,
+        ));
+        let beneficiary_lockup = contract.internal_add_lockup(&sample_lockup(
+            beneficiary.clone(),
+            600_000,
+            100_000,
+            GENESIS_TIMESTAMP_SEC + 10,
+        ));
+
+        contract.set_lockups_claimed_balances(vec![
+            (alice_lockup, alice.clone(), 0.into()),
+            (beneficiary_lockup, beneficiary.clone(), 600_000.into()),
+        ]);
+
+        assert_eq!(
+            contract.lockups.get(u64::from(alice_lockup)).unwrap().claimed_balance.0,
+            0
+        );
+        assert_eq!(
+            contract
+                .lockups
+                .get(u64::from(beneficiary_lockup))
+                .unwrap()
+                .claimed_balance
+                .0,
+            600_000
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Claimed balance cannot exceed total balance")]
+    fn test_set_lockups_claimed_balances_rejects_balance_above_total() {
+        let manager = manager();
+        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+
+        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+        let alice = alice();
+        let alice_lockup = contract.internal_add_lockup(&sample_lockup(
+            alice.clone(),
+            1_000_000,
+            250_000,
+            GENESIS_TIMESTAMP_SEC + 10,
+        ));
+
+        contract.set_lockups_claimed_balances(vec![(alice_lockup, alice, 1_000_001.into())]);
+    }
+
+    #[test]
+    #[should_panic(expected = "belongs to")]
+    fn test_set_lockups_claimed_balances_rejects_mismatched_account() {
+        let manager = manager();
+        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+
+        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+        let alice = alice();
+        let beneficiary = beneficiary();
+        let alice_lockup = contract.internal_add_lockup(&sample_lockup(
+            alice,
+            1_000_000,
+            250_000,
+            GENESIS_TIMESTAMP_SEC + 10,
+        ));
+
+        contract.set_lockups_claimed_balances(vec![(alice_lockup, beneficiary, 0.into())]);
     }
 
     #[test]

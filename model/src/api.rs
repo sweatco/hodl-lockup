@@ -44,6 +44,8 @@ pub trait LockupApi {
 
     fn set_accounts_total_balances(&mut self, accounts_and_balances: Vec<(AccountId, U128)>);
 
+    fn set_lockups_claimed_balances(&mut self, lockups_claimed_balances: Vec<(LockupIndex, AccountId, U128)>);
+
     // preserving both options for API compatibility
     fn add_to_deposit_whitelist(&mut self, account_id: Option<AccountId>, account_ids: Option<Vec<AccountId>>);
 
