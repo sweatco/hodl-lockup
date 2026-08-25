@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use anyhow::Result;
-use hodl_model::{api::LockupViewApiIntegration, ft_message::FtMessage, lockup::LockupCreate, schedule::Schedule};
+use hodl_model::{api::LockupViewApiIntegration, lockup::LockupCreate, schedule::Schedule};
 use near_workspaces::types::NearToken;
 use nitka::misc::ToNear;
 use serde_json::to_string;
@@ -36,11 +36,11 @@ async fn create_lockups(context: &mut Context) -> Result<()> {
             .storage_deposit(account.to_near().into(), None)
             .await?;
 
-        let message = FtMessage::LockupCreate(LockupCreate {
+        let message = LockupCreate {
             account_id: account.to_near(),
             schedule: Schedule::new_unlocked(100),
             vesting_schedule: None,
-        });
+        };
 
         context
             .ft_contract()

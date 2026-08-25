@@ -85,9 +85,12 @@ pub(crate) async fn prepare_contract() -> Result<Context> {
         .lockup()
         .new(
             context.ft_contract().contract.id().clone(),
-            vec![manager.to_near()],
-            Some(vec![manager.to_near()]),
             manager.to_near(),
+            vec![
+                ("DepositManager".to_string(), vec![manager.to_near()]),
+                ("StagingManager".to_string(), vec![manager.to_near()]),
+                ("UpgradeManager".to_string(), vec![manager.to_near()]),
+            ],
         )
         .await?;
 
