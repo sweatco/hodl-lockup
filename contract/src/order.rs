@@ -193,6 +193,11 @@ impl OrderCallback for Contract {
 
         let mut execution_result = OrdersExecutionResult::default();
         for (index, order) in orders.iter().enumerate() {
+            // `promise_result_checked` (its suggested replacement) returns
+            // `Result<Vec<u8>, PromiseError>` bounded by a `max_len`, a
+            // different shape/semantics than the plain success/failure check
+            // needed here — not a drop-in replacement.
+            #[allow(deprecated)]
             let tx_result = env::promise_result(index as _);
 
             if tx_result == PromiseResult::Failed {
@@ -226,6 +231,10 @@ impl OrderCallback for Contract {
 }
 
 impl Contract {
+    // Only called from `on_orders_executed`, itself only reachable via a
+    // cross-contract callback (see `OrderCallback`'s `#[allow(dead_code)]`
+    // above) -- same false positive.
+    #[allow(dead_code)]
     fn refund_order(&mut self, order: OrderExecution) {
         for (index, (amount, _)) in order.details {
             self.refund(index, amount);
