@@ -1,5 +1,4 @@
 use hodl_model::{
-    draft::{Draft, DraftGroupIndex, DraftIndex},
     lockup::{Lockup, LockupIndex},
     TimestampSec, WrappedBalance,
 };
@@ -20,30 +19,6 @@ pub struct FtLockupNew {
 
 #[derive(Serialize, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct FtLockupAddToDepositWhitelist {
-    pub account_ids: Vec<AccountId>,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
-pub struct FtLockupRemoveFromDepositWhitelist {
-    pub account_ids: Vec<AccountId>,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
-pub struct FtLockupAddToDraftOperatorsWhitelist {
-    pub account_ids: Vec<AccountId>,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
-pub struct FtLockupRemoveFromDraftOperatorsWhitelist {
-    pub account_ids: Vec<AccountId>,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
 pub struct FtLockupCreateLockup {
     pub id: LockupIndex,
     pub account_id: AccountId,
@@ -51,12 +26,11 @@ pub struct FtLockupCreateLockup {
     pub start: TimestampSec,
     pub finish: TimestampSec,
     pub terminatable: bool,
-    pub draft_id: Option<DraftIndex>,
 }
 
-impl From<(LockupIndex, Lockup, Option<DraftIndex>)> for FtLockupCreateLockup {
-    fn from(tuple: (LockupIndex, Lockup, Option<DraftIndex>)) -> Self {
-        let (id, lockup, draft_id) = tuple;
+impl From<(LockupIndex, Lockup)> for FtLockupCreateLockup {
+    fn from(tuple: (LockupIndex, Lockup)) -> Self {
+        let (id, lockup) = tuple;
         Self {
             id,
             account_id: lockup.account_id,
@@ -64,7 +38,6 @@ impl From<(LockupIndex, Lockup, Option<DraftIndex>)> for FtLockupCreateLockup {
             start: lockup.schedule.0.first().unwrap().timestamp,
             finish: lockup.schedule.0.last().unwrap().timestamp,
             terminatable: lockup.termination_config.is_some(),
-            draft_id,
         }
     }
 }
@@ -86,58 +59,6 @@ pub struct FtLockupTerminateLockup {
 
 #[derive(Serialize, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct FtLockupCreateDraftGroup {
-    pub id: DraftGroupIndex,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
-pub struct FtLockupCreateDraft {
-    pub id: DraftIndex,
-    pub draft_group_id: DraftGroupIndex,
-    pub account_id: AccountId,
-    pub balance: WrappedBalance,
-    pub start: TimestampSec,
-    pub finish: TimestampSec,
-    pub terminatable: bool,
-}
-
-impl From<(DraftIndex, Draft)> for FtLockupCreateDraft {
-    fn from(tuple: (DraftIndex, Draft)) -> Self {
-        let (id, draft) = tuple;
-        Self {
-            id,
-            draft_group_id: draft.draft_group_id,
-            account_id: draft.lockup_create.account_id,
-            balance: draft.lockup_create.schedule.total_balance().into(),
-            start: draft.lockup_create.schedule.0.first().unwrap().timestamp,
-            finish: draft.lockup_create.schedule.0.last().unwrap().timestamp,
-            terminatable: draft.lockup_create.vesting_schedule.is_some(),
-        }
-    }
-}
-
-#[derive(Serialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
-pub struct FtLockupFundDraftGroup {
-    pub id: DraftGroupIndex,
-    pub amount: WrappedBalance,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
-pub struct FtLockupDiscardDraftGroup {
-    pub id: DraftGroupIndex,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
-pub struct FtLockupDeleteDraft {
-    pub id: DraftIndex,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
 pub struct FtLockupUpdateOrder {
     pub id: LockupIndex,
     pub amount: WrappedBalance,
@@ -150,18 +71,9 @@ pub struct FtLockupUpdateOrder {
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum EventKind {
     FtLockupNew(FtLockupNew),
-    FtLockupAddToDepositWhitelist(FtLockupAddToDepositWhitelist),
-    FtLockupRemoveFromDepositWhitelist(FtLockupRemoveFromDepositWhitelist),
-    FtLockupAddToDraftOperatorsWhitelist(FtLockupAddToDraftOperatorsWhitelist),
-    FtLockupRemoveFromDraftOperatorsWhitelist(FtLockupRemoveFromDraftOperatorsWhitelist),
     FtLockupCreateLockup(Vec<FtLockupCreateLockup>),
     FtLockupClaimLockup(Vec<FtLockupClaimLockup>),
     FtLockupTerminateLockup(Vec<FtLockupTerminateLockup>),
-    FtLockupCreateDraftGroup(Vec<FtLockupCreateDraftGroup>),
-    FtLockupCreateDraft(Vec<FtLockupCreateDraft>),
-    FtLockupFundDraftGroup(Vec<FtLockupFundDraftGroup>),
-    FtLockupDiscardDraftGroup(Vec<FtLockupDiscardDraftGroup>),
-    FtLockupDeleteDraft(Vec<FtLockupDeleteDraft>),
     FtLockupUpdateContract(FtLockupUpdateContract),
 
     UpdateOrders(Vec<FtLockupUpdateOrder>),
@@ -209,7 +121,6 @@ pub(crate) fn emit(event_kind: EventKind) {
 mod tests {
     use std::str::FromStr;
 
-    use hodl_model::{lockup::LockupCreate, schedule::Schedule};
     use near_sdk::{
         serde_json::{from_str, json, Value},
         test_utils,
@@ -249,94 +160,6 @@ mod tests {
     }
 
     #[test]
-    fn test_ft_lockup_add_to_deposit_whitelist() {
-        testing_env!(get_context());
-
-        let account_ids: Vec<AccountId> = vec!["alice.near", "bob.near"]
-            .iter()
-            .map(|s| AccountId::from_str(s).unwrap())
-            .collect();
-        emit(EventKind::FtLockupAddToDepositWhitelist(
-            FtLockupAddToDepositWhitelist { account_ids },
-        ));
-        compare_json(
-            &test_utils::get_logs()[0],
-            json!({
-                "standard": PACKAGE_NAME,
-                "version": VERSION,
-                "event": "ft_lockup_add_to_deposit_whitelist",
-                "data": { "account_ids": ["alice.near", "bob.near"] },
-            }),
-        );
-    }
-
-    #[test]
-    fn test_ft_lockup_remove_from_deposit_whitelist() {
-        testing_env!(get_context());
-
-        let account_ids: Vec<AccountId> = vec!["alice.near", "bob.near"]
-            .iter()
-            .map(|s| AccountId::from_str(s).unwrap())
-            .collect();
-        emit(EventKind::FtLockupRemoveFromDepositWhitelist(
-            FtLockupRemoveFromDepositWhitelist { account_ids },
-        ));
-        compare_json(
-            &test_utils::get_logs()[0],
-            json!({
-                "standard": PACKAGE_NAME,
-                "version": VERSION,
-                "event": "ft_lockup_remove_from_deposit_whitelist",
-                "data": { "account_ids": ["alice.near", "bob.near"] },
-            }),
-        );
-    }
-
-    #[test]
-    fn test_ft_lockup_add_to_draft_operators_whitelist() {
-        testing_env!(get_context());
-
-        let account_ids: Vec<AccountId> = vec!["alice.near", "bob.near"]
-            .iter()
-            .map(|s| AccountId::from_str(s).unwrap())
-            .collect();
-        emit(EventKind::FtLockupAddToDraftOperatorsWhitelist(
-            FtLockupAddToDraftOperatorsWhitelist { account_ids },
-        ));
-        compare_json(
-            &test_utils::get_logs()[0],
-            json!({
-                "standard": PACKAGE_NAME,
-                "version": VERSION,
-                "event": "ft_lockup_add_to_draft_operators_whitelist",
-                "data": { "account_ids": ["alice.near", "bob.near"] },
-            }),
-        );
-    }
-
-    #[test]
-    fn test_ft_lockup_remove_from_draft_operators_whitelist() {
-        testing_env!(get_context());
-
-        let account_ids: Vec<AccountId> = vec!["alice.near", "bob.near"]
-            .iter()
-            .map(|s| AccountId::from_str(s).unwrap())
-            .collect();
-        emit(EventKind::FtLockupRemoveFromDraftOperatorsWhitelist(
-            FtLockupRemoveFromDraftOperatorsWhitelist { account_ids },
-        ));
-        compare_json(
-            &test_utils::get_logs()[0],
-            json!({
-                "standard": PACKAGE_NAME,
-                "version": VERSION,
-                "event": "ft_lockup_remove_from_draft_operators_whitelist",
-                "data": { "account_ids": ["alice.near", "bob.near"] },
-            }),
-        );
-    }
-
-    #[test]
     fn test_ft_lockup_create_lockup() {
         testing_env!(get_context());
 
@@ -345,9 +168,8 @@ mod tests {
         let timestamp: TimestampSec = 1_500_000_000;
         let lockup = Lockup::new_unlocked_since(account_id.clone(), balance.0, timestamp);
         let lockup_id: LockupIndex = 100;
-        let draft_id: DraftIndex = 33;
 
-        let event: FtLockupCreateLockup = (100, lockup, Some(draft_id)).into();
+        let event: FtLockupCreateLockup = (100, lockup).into();
 
         emit(EventKind::FtLockupCreateLockup(vec![event]));
         compare_json(
@@ -364,7 +186,6 @@ mod tests {
                         "start": timestamp - 1,
                         "finish": timestamp,
                         "terminatable": false,
-                        "draft_id": Some(draft_id),
                     },
                 ],
             }),
@@ -429,151 +250,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_ft_lockup_create_draft_group() {
-        testing_env!(get_context());
-
-        let draft_group_id: DraftGroupIndex = 22;
-
-        let event = FtLockupCreateDraftGroup { id: draft_group_id };
-
-        emit(EventKind::FtLockupCreateDraftGroup(vec![event]));
-        compare_json(
-            &test_utils::get_logs()[0],
-            json!({
-                "standard": PACKAGE_NAME,
-                "version": VERSION,
-                "event": "ft_lockup_create_draft_group",
-                "data": [
-                    {
-                        "id": draft_group_id,
-                    },
-                ],
-            }),
-        );
-    }
-
-    #[test]
-    fn test_ft_lockup_create_draft() {
-        testing_env!(get_context());
-
-        let account_id = AccountId::from_str("alice.near").unwrap();
-        let balance: WrappedBalance = 10_000.into();
-        let timestamp: TimestampSec = 1_500_000_000;
-        let lockup_create = LockupCreate {
-            account_id: account_id.clone(),
-            schedule: Schedule::new_unlocked_since(balance.0, timestamp),
-            vesting_schedule: None,
-        };
-        let draft_group_id: DraftGroupIndex = 123;
-        let draft = Draft {
-            draft_group_id,
-            lockup_create,
-        };
-        let draft_id: DraftIndex = 33;
-
-        let event: FtLockupCreateDraft = (draft_id, draft).into();
-
-        emit(EventKind::FtLockupCreateDraft(vec![event]));
-
-        compare_json(
-            &test_utils::get_logs()[0],
-            json!({
-                "standard": PACKAGE_NAME,
-                "version": VERSION,
-                "event": "ft_lockup_create_draft",
-                "data": [
-                    {
-                        "id": draft_id,
-                        "draft_group_id": draft_group_id,
-                        "account_id": account_id.to_string(),
-                        "balance": balance,
-                        "start": timestamp - 1,
-                        "finish": timestamp,
-                        "terminatable": false,
-                    },
-                ],
-            }),
-        );
-    }
-
-    #[test]
-    fn test_ft_lockup_fund_draft_group() {
-        testing_env!(get_context());
-
-        let draft_group_id: DraftGroupIndex = 22;
-        let amount: WrappedBalance = 10000.into();
-
-        let event = FtLockupFundDraftGroup {
-            id: draft_group_id,
-            amount,
-        };
-
-        emit(EventKind::FtLockupFundDraftGroup(vec![event]));
-
-        compare_json(
-            &test_utils::get_logs()[0],
-            json!({
-                "standard": PACKAGE_NAME,
-                "version": VERSION,
-                "event": "ft_lockup_fund_draft_group",
-                "data": [
-                    {
-                        "id": draft_group_id,
-                        "amount": amount,
-                    },
-                ],
-            }),
-        );
-    }
-
-    #[test]
-    fn test_ft_lockup_discard_draft_group() {
-        testing_env!(get_context());
-
-        let draft_group_id: DraftGroupIndex = 22;
-
-        let event = FtLockupDiscardDraftGroup { id: draft_group_id };
-
-        emit(EventKind::FtLockupDiscardDraftGroup(vec![event]));
-
-        compare_json(
-            &test_utils::get_logs()[0],
-            json!({
-                "standard": PACKAGE_NAME,
-                "version": VERSION,
-                "event": "ft_lockup_discard_draft_group",
-                "data": [
-                    {
-                        "id": draft_group_id,
-                    },
-                ],
-            }),
-        );
-    }
-
-    #[test]
-    fn test_ft_lockup_delete_draft() {
-        testing_env!(get_context());
-
-        let draft_id: DraftIndex = 22;
-
-        let event = FtLockupDeleteDraft { id: draft_id };
-
-        emit(EventKind::FtLockupDeleteDraft(vec![event]));
-
-        compare_json(
-            &test_utils::get_logs()[0],
-            json!({
-                "standard": PACKAGE_NAME,
-                "version": VERSION,
-                "event": "ft_lockup_delete_draft",
-                "data": [
-                    {
-                        "id": draft_id,
-                    },
-                ],
-            }),
-        );
-    }
 }

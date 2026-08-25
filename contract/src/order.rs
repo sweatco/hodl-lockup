@@ -5,16 +5,17 @@ use hodl_model::{
     order::{OrderApi, OrderExecution, OrdersExecutionResult},
     Balance,
 };
+use near_plugins::{access_control_any, AccessControllable};
 use near_sdk::{env, ext_contract, near, require, AccountId, Gas, Promise, PromiseOrValue, PromiseResult};
 
-use crate::{internal::assert_enough_gas, Contract, ContractExt, FtTransferPromise, GAS_FOR_FT_TRANSFER};
+use crate::{internal::assert_enough_gas, Contract, ContractExt, FtTransferPromise, Roles, GAS_FOR_FT_TRANSFER};
 
 const GAS_FOR_AFTER_FT_TRANSFER: Gas = Gas::from_tgas(50);
 
 #[near]
 impl OrderApi for Contract {
+    #[access_control_any(roles(Roles::DepositManager))]
     fn reset_execution_status(&mut self) {
-        self.assert_deposit_whitelist(&env::predecessor_account_id());
         self.is_executing = false;
     }
 
@@ -22,13 +23,12 @@ impl OrderApi for Contract {
         self.orders.get(&account_id).unwrap_or_default()
     }
 
+    #[access_control_any(roles(Roles::DepositManager))]
     fn authorize(
         &mut self,
         account_ids: Vec<AccountId>,
         percentage: Option<u32>,
     ) -> PromiseOrValue<OrdersExecutionResult> {
-        self.assert_deposit_whitelist(&env::predecessor_account_id());
-
         let percentage = unwrap_percentage(percentage);
 
         if percentage == 0 {
@@ -81,9 +81,8 @@ impl OrderApi for Contract {
         }
     }
 
+    #[access_control_any(roles(Roles::DepositManager))]
     fn buy(&mut self, account_ids: Vec<AccountId>, percentage: Option<u32>) -> Vec<OrderExecution> {
-        self.assert_deposit_whitelist(&env::predecessor_account_id());
-
         let percentage = unwrap_percentage(percentage);
         self.execute_internal(account_ids, percentage)
     }

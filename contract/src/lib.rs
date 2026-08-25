@@ -1,30 +1,29 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::Into,
-    str::FromStr,
 };
 
 use hodl_model::{
     api::LockupApi,
-    draft::{Draft, DraftGroup, DraftGroupIndex, DraftIndex},
     lockup::{Lockup, LockupClaim, LockupIndex},
     schedule::Schedule,
-    termination::{TerminationConfig, VestingConditions},
     util::current_timestamp_sec,
     TimestampSec, TokenAccountId, WrappedBalance,
 };
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
+use near_plugins::{access_control, access_control_any, AccessControlRole, AccessControllable, Upgradable};
 use near_sdk::{
     assert_one_yocto,
-    collections::{LookupMap, UnorderedMap, UnorderedSet, Vector},
+    borsh::BorshDeserialize,
+    collections::{LookupMap, Vector},
     env::{self, panic_str},
     ext_contract, is_promise_success,
-    json_types::{Base58CryptoHash, U128},
+    json_types::U128,
     log, near, near_bindgen, require,
     serde::Serialize,
     serde_json, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue,
 };
-use near_self_update_proc::SelfUpdate;
+use strum::EnumIter;
 
 pub mod callbacks;
 pub mod event;
@@ -37,13 +36,7 @@ mod order;
 pub mod view;
 
 use crate::{
-    callbacks::{ext_self, SelfCallbacks},
-    event::{
-        emit, EventKind, FtLockupAddToDepositWhitelist, FtLockupAddToDraftOperatorsWhitelist, FtLockupClaimLockup,
-        FtLockupCreateDraft, FtLockupCreateDraftGroup, FtLockupCreateLockup, FtLockupDeleteDraft,
-        FtLockupDiscardDraftGroup, FtLockupFundDraftGroup, FtLockupNew, FtLockupRemoveFromDepositWhitelist,
-        FtLockupRemoveFromDraftOperatorsWhitelist, FtLockupTerminateLockup, FtLockupUpdateOrder,
-    },
+    event::{emit, EventKind, FtLockupClaimLockup, FtLockupCreateLockup, FtLockupNew, FtLockupTerminateLockup, FtLockupUpdateOrder},
     serde_json::json,
 };
 
@@ -51,38 +44,44 @@ pub const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const GAS_FOR_FT_TRANSFER: Gas = Gas::from_gas(15_000_000_000_000);
-const GAS_FOR_AFTER_FT_TRANSFER: Gas = Gas::from_gas(20_000_000_000_000);
-const GAS_EXT_CALL_COST: Gas = Gas::from_gas(10_000_000_000_000);
-const GAS_MIN_FOR_CONVERT: Gas = Gas::from_gas(15_000_000_000_000);
 
-const DEFAULT_BENEFICIARY_ID: &str = "grants.sweat";
+/// Roles for `near_plugins`' `AccessControllable`. `StagingManager`/`UpgradeManager`
+/// are deliberately separate from `DepositManager`: code-deployment is a more
+/// dangerous capability than the operational roles and must not come bundled.
+///
+/// Must live in the same module as the `#[access_control]`-annotated struct:
+/// the `AccessControlRole` derive generates a private `RoleFlags` type that
+/// the `access_control` expansion refers to by name.
+#[near(serializers = [json])]
+#[derive(AccessControlRole, Copy, Clone, Debug, PartialEq, Eq, Hash, EnumIter)]
+pub enum Roles {
+    /// Old `deposit_whitelist`: full admin — issue lockups, terminate,
+    /// execute/reset orders, transfer_accounts.
+    DepositManager,
+    /// `Upgradable::up_stage_code`.
+    StagingManager,
+    /// `Upgradable::up_deploy_code` + staging-duration management.
+    UpgradeManager,
+}
+
+pub use hodl_model::api::RoleAssignments;
 
 #[near(contract_state)]
-#[derive(PanicOnDefault, SelfUpdate)]
+#[derive(PanicOnDefault, Upgradable)]
+#[access_control(role_type(Roles))]
+#[upgradable(access_control_roles(
+    code_stagers(Roles::StagingManager),
+    code_deployers(Roles::UpgradeManager),
+    duration_initializers(Roles::UpgradeManager),
+    duration_update_stagers(Roles::UpgradeManager),
+    duration_update_appliers(Roles::UpgradeManager),
+))]
 pub struct Contract {
     pub token_account_id: TokenAccountId,
 
     pub lockups: Vector<Lockup>,
 
     pub account_lockups: LookupMap<AccountId, HashSet<LockupIndex>>,
-
-    /// account ids that can perform all actions:
-    /// - manage deposit_whitelist
-    /// - manage drafts, draft_groups
-    /// - create lockups, terminate lockups, fund draft_groups
-    pub deposit_whitelist: UnorderedSet<AccountId>,
-
-    /// account ids that can perform all actions on drafts:
-    /// - manage drafts, draft_groups
-    pub draft_operators_whitelist: UnorderedSet<AccountId>,
-
-    pub next_draft_id: DraftIndex,
-    pub drafts: LookupMap<DraftIndex, Draft>,
-    pub next_draft_group_id: DraftGroupIndex,
-    pub draft_groups: UnorderedMap<DraftGroupIndex, DraftGroup>,
-
-    /// The account ID authorized to perform sensitive operations on the contract.
-    pub manager: AccountId,
 
     pub orders: LookupMap<AccountId, Vec<LockupClaim>>,
     pub is_executing: bool,
@@ -93,20 +92,39 @@ pub struct Contract {
 pub(crate) enum StorageKey {
     Lockups,
     AccountLockups,
-    DepositWhitelist,
-    DraftOperatorsWhitelist,
-    Drafts,
-    DraftGroups,
     Orders,
 }
 
 impl Contract {
-    fn assert_account_can_update(&self) {
-        assert_eq!(
-            env::predecessor_account_id(),
-            self.manager,
-            "Only the manager can update the code"
+    /// One-shot ACL bootstrap for `new`/`migrate`: the predecessor (the
+    /// contract's own account, forced by `#[private]`) becomes a temporary
+    /// super-admin so it can perform the grants — a fresh ACL has no admins,
+    /// and `acl_grant_role`/`acl_transfer_super_admin` authorize by
+    /// predecessor — then hands super-admin off to `super_admin`, retaining
+    /// no power itself. Every step is `require!`d: a silent ACL failure must
+    /// abort the whole transaction, never complete init with a
+    /// misconfigured ACL.
+    pub(crate) fn init_authority(&mut self, super_admin: AccountId, roles: RoleAssignments) {
+        require!(
+            self.acl_init_super_admin(env::predecessor_account_id()),
+            "ACL bootstrap failed: super admin is already initialized"
         );
+        self.grant_role_assignments(roles);
+        require!(
+            self.acl_transfer_super_admin(super_admin).is_some(),
+            "ACL bootstrap failed: could not transfer super admin"
+        );
+    }
+
+    pub(crate) fn grant_role_assignments(&mut self, roles: RoleAssignments) {
+        for (role, account_ids) in roles {
+            for account_id in account_ids {
+                require!(
+                    self.acl_grant_role(role.clone(), account_id).is_some(),
+                    "ACL bootstrap failed: could not grant role"
+                );
+            }
+        }
     }
 }
 
@@ -114,53 +132,21 @@ impl Contract {
 impl LockupApi for Contract {
     #[allow(clippy::wrong_self_convention)]
     #[init]
-    fn new(
-        token_account_id: AccountId,
-        deposit_whitelist: Vec<AccountId>,
-        draft_operators_whitelist: Option<Vec<AccountId>>,
-        manager: AccountId,
-    ) -> Self {
-        let mut deposit_whitelist_set = UnorderedSet::new(StorageKey::DepositWhitelist);
-        deposit_whitelist_set.extend(deposit_whitelist.clone().into_iter().map(Into::into));
-        let mut draft_operators_whitelist_set = UnorderedSet::new(StorageKey::DraftOperatorsWhitelist);
-        draft_operators_whitelist_set.extend(
-            draft_operators_whitelist
-                .clone()
-                .unwrap_or_default()
-                .into_iter()
-                .map(Into::into),
-        );
-        emit(EventKind::FtLockupNew(FtLockupNew {
-            token_account_id: token_account_id.clone(),
-        }));
-        emit(EventKind::FtLockupAddToDepositWhitelist(
-            FtLockupAddToDepositWhitelist {
-                account_ids: deposit_whitelist.into_iter().map(Into::into).collect(),
-            },
-        ));
-        emit(EventKind::FtLockupAddToDraftOperatorsWhitelist(
-            FtLockupAddToDraftOperatorsWhitelist {
-                account_ids: draft_operators_whitelist
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
-            },
-        ));
-        Self {
+    #[private]
+    fn new(token_account_id: AccountId, super_admin_account_id: AccountId, roles: RoleAssignments) -> Self {
+        let mut contract = Self {
             lockups: Vector::new(StorageKey::Lockups),
             account_lockups: LookupMap::new(StorageKey::AccountLockups),
-            token_account_id,
-            deposit_whitelist: deposit_whitelist_set,
-            draft_operators_whitelist: draft_operators_whitelist_set,
-            next_draft_id: 0,
-            drafts: LookupMap::new(StorageKey::Drafts),
-            next_draft_group_id: 0,
-            draft_groups: UnorderedMap::new(StorageKey::DraftGroups),
-            manager,
+            token_account_id: token_account_id.clone(),
             orders: LookupMap::new(StorageKey::Orders),
             is_executing: false,
-        }
+        };
+
+        emit(EventKind::FtLockupNew(FtLockupNew { token_account_id }));
+
+        contract.init_authority(super_admin_account_id, roles);
+
+        contract
     }
 
     fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> Vec<LockupClaim> {
@@ -250,6 +236,7 @@ impl LockupApi for Contract {
         lockup_claims
     }
 
+    #[access_control_any(roles(Roles::DepositManager))]
     #[payable]
     fn terminate(
         &mut self,
@@ -258,7 +245,6 @@ impl LockupApi for Contract {
         termination_timestamp: Option<TimestampSec>,
     ) -> WrappedBalance {
         assert_one_yocto();
-        self.assert_deposit_whitelist(&env::predecessor_account_id());
 
         let current_timestamp = current_timestamp_sec();
         let termination_timestamp = termination_timestamp.unwrap_or(current_timestamp);
@@ -324,50 +310,6 @@ impl LockupApi for Contract {
         emit(EventKind::FtLockupTerminateLockup(vec![event]));
 
         unvested_balance.into()
-    }
-
-    // preserving both options for API compatibility
-    #[payable]
-    fn add_to_deposit_whitelist(&mut self, account_id: Option<AccountId>, account_ids: Option<Vec<AccountId>>) {
-        assert_one_yocto();
-        self.assert_deposit_whitelist(&env::predecessor_account_id());
-        let account_ids = if let Some(account_ids) = account_ids {
-            account_ids
-        } else {
-            vec![account_id.expect("expected either account_id or account_ids")]
-        };
-        for account_id in &account_ids {
-            self.deposit_whitelist.insert(account_id);
-        }
-        emit(EventKind::FtLockupAddToDepositWhitelist(
-            FtLockupAddToDepositWhitelist {
-                account_ids: account_ids.into_iter().map(Into::into).collect(),
-            },
-        ));
-    }
-
-    // preserving both options for API compatibility
-    #[payable]
-    fn remove_from_deposit_whitelist(&mut self, account_id: Option<AccountId>, account_ids: Option<Vec<AccountId>>) {
-        assert_one_yocto();
-        self.assert_deposit_whitelist(&env::predecessor_account_id());
-        let account_ids = if let Some(account_ids) = account_ids {
-            account_ids
-        } else {
-            vec![account_id.expect("expected either account_id or account_ids")]
-        };
-        for account_id in &account_ids {
-            self.deposit_whitelist.remove(account_id);
-        }
-        assert!(
-            !self.deposit_whitelist.is_empty(),
-            "cannot remove all accounts from deposit whitelist",
-        );
-        emit(EventKind::FtLockupRemoveFromDepositWhitelist(
-            FtLockupRemoveFromDepositWhitelist {
-                account_ids: account_ids.into_iter().map(Into::into).collect(),
-            },
-        ));
     }
 }
 
@@ -490,9 +432,13 @@ mod tests {
     #[test]
     fn test_terminate_without_orders_leaves_lockup_state() {
         let manager = manager();
-        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+        set_context(&contract_account(), 0, GENESIS_TIMESTAMP_SEC);
 
-        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+        let mut contract = Contract::new(
+            token_account(),
+            manager.clone(),
+            vec![(Roles::DepositManager.into(), vec![manager.clone()])],
+        );
 
         let account = alice();
         let total_balance = 1_000_000;
@@ -519,9 +465,13 @@ mod tests {
     #[test]
     fn test_terminate_preserves_order_when_within_total() {
         let manager = manager();
-        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+        set_context(&contract_account(), 0, GENESIS_TIMESTAMP_SEC);
 
-        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+        let mut contract = Contract::new(
+            token_account(),
+            manager.clone(),
+            vec![(Roles::DepositManager.into(), vec![manager.clone()])],
+        );
 
         let account = alice();
         let total_balance = 1_000_000;
@@ -563,9 +513,13 @@ mod tests {
     #[test]
     fn test_terminate_trims_order_to_remaining_total() {
         let manager = manager();
-        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+        set_context(&contract_account(), 0, GENESIS_TIMESTAMP_SEC);
 
-        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+        let mut contract = Contract::new(
+            token_account(),
+            manager.clone(),
+            vec![(Roles::DepositManager.into(), vec![manager.clone()])],
+        );
 
         let account = alice();
         let total_balance = 1_000_000;
@@ -607,9 +561,13 @@ mod tests {
     #[test]
     fn test_terminate_zeroes_order_and_removes_lockup_when_unvested() {
         let manager = manager();
-        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+        set_context(&contract_account(), 0, GENESIS_TIMESTAMP_SEC);
 
-        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+        let mut contract = Contract::new(
+            token_account(),
+            manager.clone(),
+            vec![(Roles::DepositManager.into(), vec![manager.clone()])],
+        );
 
         let account = alice();
         let total_balance = 1_000_000;
@@ -650,9 +608,13 @@ mod tests {
     #[test]
     fn test_terminate_updates_only_matching_order() {
         let manager = manager();
-        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+        set_context(&contract_account(), 0, GENESIS_TIMESTAMP_SEC);
 
-        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+        let mut contract = Contract::new(
+            token_account(),
+            manager.clone(),
+            vec![(Roles::DepositManager.into(), vec![manager.clone()])],
+        );
 
         let account = alice();
         let finish_timestamp = GENESIS_TIMESTAMP_SEC + 10;
@@ -718,9 +680,13 @@ mod tests {
     #[test]
     fn test_terminate_subsequent_lockup_does_not_double_existing_order() {
         let manager = manager();
-        set_context(&manager, 0, GENESIS_TIMESTAMP_SEC);
+        set_context(&contract_account(), 0, GENESIS_TIMESTAMP_SEC);
 
-        let mut contract = Contract::new(token_account(), vec![manager.clone()], None, manager.clone());
+        let mut contract = Contract::new(
+            token_account(),
+            manager.clone(),
+            vec![(Roles::DepositManager.into(), vec![manager.clone()])],
+        );
 
         let account = alice();
         let finish_timestamp = GENESIS_TIMESTAMP_SEC + 10;

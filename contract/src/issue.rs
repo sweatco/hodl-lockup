@@ -5,18 +5,19 @@ use hodl_model::{
     termination::{TerminationConfig, VestingConditions},
     TimestampSec, ONE_YEAR_SEC,
 };
+use near_plugins::{access_control_any, AccessControllable};
 use near_sdk::{env, json_types::U128, near, AccountId};
 
 use crate::{
     event::{emit, EventKind, FtLockupCreateLockup},
-    Contract, ContractExt,
+    Contract, ContractExt, Roles,
 };
 
 #[near]
 impl IssueApi for Contract {
+    #[access_control_any(roles(Roles::DepositManager))]
     fn issue(&mut self, issue_date: TimestampSec, amounts: Vec<(AccountId, U128)>) {
         let issuer_id = env::predecessor_account_id();
-        self.assert_deposit_whitelist(&issuer_id);
 
         let cliff_end_date = issue_date + ONE_YEAR_SEC;
         let lockup_end_date = cliff_end_date + 3 * ONE_YEAR_SEC;
@@ -45,7 +46,7 @@ impl IssueApi for Contract {
             };
 
             let index = self.internal_add_lockup(&lockup);
-            events.push((index, lockup, None).into());
+            events.push((index, lockup).into());
         }
 
         emit(EventKind::FtLockupCreateLockup(events));

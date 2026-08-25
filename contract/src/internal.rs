@@ -6,17 +6,6 @@ use near_sdk::{env, require, Gas};
 use crate::{AccountId, Contract};
 
 impl Contract {
-    pub(crate) fn assert_deposit_whitelist(&self, account_id: &AccountId) {
-        assert!(self.deposit_whitelist.contains(account_id), "Not in deposit whitelist");
-    }
-
-    pub(crate) fn assert_draft_operators_whitelist(&self, account_id: &AccountId) {
-        assert!(
-            (self.deposit_whitelist.contains(account_id) || self.draft_operators_whitelist.contains(account_id)),
-            "Not in draft operators whitelist"
-        );
-    }
-
     pub(crate) fn internal_add_lockup(&mut self, lockup: &Lockup) -> LockupIndex {
         let index = LockupIndex::try_from(self.lockups.len()).unwrap();
         self.lockups.push(lockup);

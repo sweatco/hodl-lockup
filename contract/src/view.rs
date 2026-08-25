@@ -48,10 +48,6 @@ impl LockupViewApi for Contract {
             .collect()
     }
 
-    fn get_deposit_whitelist(&self) -> Vec<AccountId> {
-        self.deposit_whitelist.to_vec()
-    }
-
     fn get_version(&self) -> String {
         VERSION.into()
     }
