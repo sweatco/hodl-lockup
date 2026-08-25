@@ -2114,10 +2114,11 @@ dependencies = [
  "fake 4.0.0",
  "hodl-model",
  "near-contract-standards 5.9.0",
+ "near-plugins",
  "near-sdk 5.9.0",
- "near-self-update-proc",
  "rand 0.8.5",
  "sha256",
+ "strum 0.27.2",
 ]
 
 [[package]]
@@ -3058,7 +3059,7 @@ dependencies = [
  "strum_macros 0.24.3",
  "thiserror 1.0.69",
  "tokio",
- "toml",
+ "toml 0.7.8",
  "url",
 ]
 
@@ -3294,6 +3295,31 @@ dependencies = [
  "serde_yaml",
  "strum 0.24.1",
  "thiserror 2.0.12",
+]
+
+[[package]]
+name = "near-plugins"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef03cc3e96b4036f8fb0e4d3589887acc5825311a2e153d6b8ab82f5f208c919"
+dependencies = [
+ "bitflags 1.3.2",
+ "near-plugins-derive",
+ "near-sdk 5.9.0",
+ "serde",
+]
+
+[[package]]
+name = "near-plugins-derive"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3b3c976d3dc37c5a2b9558268ffc8b2ed0c4a172403d4cd1deec11a2871991a"
+dependencies = [
+ "darling",
+ "proc-macro-crate 0.1.5",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
 ]
 
 [[package]]
@@ -3566,17 +3592,6 @@ dependencies = [
  "anyhow",
  "near-workspaces",
  "nitka 0.2.2",
-]
-
-[[package]]
-name = "near-self-update-proc"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7930d44eb422740465504d82fab52ba3fc8f42b8f4195330b5b4f1708b71bcd"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -4486,6 +4501,15 @@ checksum = "05e4722c697a58a99d5d06a08c30821d7c082a4632198de1eaa5a6c22ef42373"
 dependencies = [
  "fixed-hash",
  "uint 0.9.5",
+]
+
+[[package]]
+name = "proc-macro-crate"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d6ea3c4595b96363c13943497db34af4460fb474a95c43f4446ad341b8c9785"
+dependencies = [
+ "toml 0.5.11",
 ]
 
 [[package]]
@@ -5546,6 +5570,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
 
 [[package]]
+name = "strum"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
+dependencies = [
+ "strum_macros 0.27.2",
+]
+
+[[package]]
 name = "strum_macros"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5568,6 +5601,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
+ "syn 2.0.100",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
  "syn 2.0.100",
 ]
 
@@ -5954,6 +5999,15 @@ dependencies = [
  "futures-sink",
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "toml"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

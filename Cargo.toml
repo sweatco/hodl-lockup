@@ -22,13 +22,13 @@ near-workspaces = "0.10"
 
 hodl-model = { path = "model" }
 
-near-sdk = "5.1.0"
-near-contract-standards = "5.1.0"
+near-sdk = "5.2"
+near-contract-standards = "5.2"
+near-plugins = "0.5.3"
+strum = { version = "0.27", features = ["derive"] }
 
 nitka = "=0.4.0"
 nitka-proc = "=0.4.0"
 sweat-model = { git = "https://github.com/sweatco/sweat-near", rev = "96ca9d4a09ff1eb378bff1e6ca7ccd2cc2cf1b6e" }
 
 multisig-model = { git = "https://github.com/sweatco/multisig", rev = "0dbc4599db26d3f1b2dcddbd0d0cf5297663e0ef" }
-
-near-self-update-proc = "0.1.2"

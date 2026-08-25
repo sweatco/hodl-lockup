@@ -29,8 +29,9 @@ integration-api = ["hodl-model/integration-api"]
 [dependencies]
 
 near-sdk = { workspace = true, features = ["unit-testing"] }
-near-self-update-proc = { workspace = true }
 near-contract-standards = { workspace = true }
+near-plugins = { workspace = true }
+strum = { workspace = true }
 
 hodl-model = { workspace = true }
 
