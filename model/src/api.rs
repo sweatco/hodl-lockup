@@ -1,7 +1,6 @@
 #![allow(clippy::new_ret_no_self)]
 #![allow(clippy::wrong_self_convention)]
 
-use near_sdk::PromiseOrValue;
 #[cfg(not(feature = "integration-test"))]
 use near_sdk::{json_types::U128, AccountId};
 #[cfg(feature = "integration-test")]
@@ -24,14 +23,19 @@ pub trait IssueApi {
     fn issue(&mut self, issue_date: TimestampSec, amounts: Vec<(AccountId, U128)>);
 }
 
+/// Role assignments for ACL bootstrap: pairs of role name (matching a
+/// `Roles` variant in the `hodl-lockup` contract crate, e.g.
+/// `"DepositManager"`) to the accounts that should hold it. Kept
+/// string-keyed here (rather than an enum) because the `Roles` type must
+/// stay local to the contract crate — the `near_plugins::AccessControlRole`
+/// derive it uses generates a private companion type that the
+/// `#[access_control]` macro on `Contract` resolves by bare name, which only
+/// works if both live in the same module.
+pub type RoleAssignments = Vec<(String, Vec<AccountId>)>;
+
 #[make_integration_version]
 pub trait LockupApi {
-    fn new(
-        token_account_id: AccountId,
-        deposit_whitelist: Vec<AccountId>,
-        draft_operators_whitelist: Option<Vec<AccountId>>,
-        manager: AccountId,
-    ) -> Self;
+    fn new(token_account_id: AccountId, super_admin_account_id: AccountId, roles: RoleAssignments) -> Self;
 
     fn claim(&mut self, amounts: Option<Vec<(LockupIndex, Option<WrappedBalance>)>>) -> Vec<LockupClaim>;
 
@@ -41,12 +45,6 @@ pub trait LockupApi {
         hashed_schedule: Option<Schedule>,
         termination_timestamp: Option<TimestampSec>,
     ) -> WrappedBalance;
-
-    // preserving both options for API compatibility
-    fn add_to_deposit_whitelist(&mut self, account_id: Option<AccountId>, account_ids: Option<Vec<AccountId>>);
-
-    // preserving both options for API compatibility
-    fn remove_from_deposit_whitelist(&mut self, account_id: Option<AccountId>, account_ids: Option<Vec<AccountId>>);
 }
 
 #[make_integration_version]
@@ -65,8 +63,6 @@ pub trait LockupViewApi {
         from_index: Option<LockupIndex>,
         limit: Option<LockupIndex>,
     ) -> Vec<(LockupIndex, LockupView)>;
-
-    fn get_deposit_whitelist(&self) -> Vec<AccountId>;
 
     fn get_version(&self) -> String;
 

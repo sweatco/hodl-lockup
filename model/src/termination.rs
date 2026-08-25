@@ -1,4 +1,4 @@
-use near_sdk::{json_types::Base58CryptoHash, near, AccountId, CryptoHash};
+use near_sdk::{json_types::Base58CryptoHash, near, AccountId};
 
 use crate::{lockup::Lockup, schedule::Schedule, Balance, TimestampSec};
 

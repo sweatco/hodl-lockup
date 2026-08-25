@@ -1,8 +1,6 @@
 use near_sdk::{json_types::U128, AccountId};
 
 pub mod api;
-pub mod draft;
-pub mod ft_message;
 pub mod lockup;
 pub mod order;
 pub mod schedule;
