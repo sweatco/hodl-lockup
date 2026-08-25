@@ -3,7 +3,13 @@
 resolver = "2"
 
 default-members = ["contract"]
-members = ["model", "contract", "integration-tests"]
+# `integration-tests` is deliberately NOT a member: it pulls near-workspaces,
+# which needs a much newer dependency graph (near-primitives-core etc.) than
+# the contract's own `cargo near build` ABI-generation path tolerates (it
+# conflicts with the near-global-contracts version cargo-near resolves for
+# the wasm build). Kept detached with its own `[workspace]`/lockfile/
+# rust-toolchain.toml, same as sweat-jar's integration-tests.
+members = ["model", "contract"]
 
 [workspace.dependencies]
 anyhow = "1.0.75"
@@ -18,17 +24,9 @@ serde_json = "1.0"
 
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 
-near-workspaces = "0.10"
-
 hodl-model = { path = "model" }
 
-near-sdk = "5.2"
-near-contract-standards = "5.2"
+near-sdk = "5.29.0"
+near-contract-standards = "5.29.0"
 near-plugins = "0.5.3"
 strum = { version = "0.27", features = ["derive"] }
-
-nitka = "=0.4.0"
-nitka-proc = "=0.4.0"
-sweat-model = { git = "https://github.com/sweatco/sweat-near", rev = "96ca9d4a09ff1eb378bff1e6ca7ccd2cc2cf1b6e" }
-
-multisig-model = { git = "https://github.com/sweatco/multisig", rev = "0dbc4599db26d3f1b2dcddbd0d0cf5297663e0ef" }
