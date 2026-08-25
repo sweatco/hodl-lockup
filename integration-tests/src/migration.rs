@@ -1,13 +1,13 @@
 #![cfg(test)]
 
 use anyhow::Result;
-use hodl_model::{api::LockupViewApiIntegration, lockup::LockupCreate, schedule::Schedule};
-use near_workspaces::types::NearToken;
-use nitka::misc::ToNear;
+use hodl_model::{lockup::LockupCreate, schedule::Schedule};
 use serde_json::to_string;
-use sweat_model::{FungibleTokenCoreIntegration, StorageManagementIntegration, SweatApiIntegration};
 
-use crate::context::{prepare_contract, Context, IntegrationContext};
+use crate::{
+    context::{prepare_contract, Context},
+    ft, lockup,
+};
 
 #[tokio::test]
 async fn migration() -> Result<()> {
@@ -15,7 +15,7 @@ async fn migration() -> Result<()> {
 
     create_lockups(&mut context).await?;
 
-    dbg!(context.lockup().get_num_lockups().await?);
+    dbg!(lockup::get_num_lockups(&context.lockup).await?);
 
     Ok(())
 }
@@ -23,36 +23,27 @@ async fn migration() -> Result<()> {
 async fn create_lockups(context: &mut Context) -> Result<()> {
     let manager = context.manager().await?;
 
-    context
-        .ft_contract()
-        .tge_mint(&manager.to_near(), 1_000_000_000.into())
-        .await?;
+    ft::tge_mint(&context.ft, manager.id(), 1_000_000_000).await?;
 
     for i in 0..20 {
         let account = context.account(&format!("bob_{i}")).await?;
 
-        context
-            .ft_contract()
-            .storage_deposit(account.to_near().into(), None)
-            .await?;
+        ft::storage_deposit(&context.ft, account.id()).await?;
 
         let message = LockupCreate {
-            account_id: account.to_near(),
+            account_id: account.id().as_str().parse().unwrap(),
             schedule: Schedule::new_unlocked(100),
             vesting_schedule: None,
         };
 
-        context
-            .ft_contract()
-            .ft_transfer_call(
-                context.lockup().contract.id().clone(),
-                100.into(),
-                None,
-                to_string(&message).unwrap(),
-            )
-            .deposit(NearToken::from_yoctonear(1))
-            .with_user(&manager)
-            .await?;
+        ft::ft_transfer_call(
+            &context.ft,
+            &manager,
+            context.lockup.id(),
+            100,
+            &to_string(&message).unwrap(),
+        )
+        .await?;
     }
 
     Ok(())

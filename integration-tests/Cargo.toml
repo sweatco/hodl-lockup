@@ -8,25 +8,25 @@ edition = "2021"
 name = "integration_tests"
 
 [dependencies]
-base58 = "0.2.0"
+rand = "0.8.5"
+tokio = { version = "1.28", features = ["macros", "rt-multi-thread"] }
+anyhow = "1.0.75"
+serde_json = "1.0"
 
-rand = { workspace = true }
-tokio = { workspace = true }
-anyhow = { workspace = true }
-async-trait = { workspace = true }
-ed25519-dalek = { workspace = true }
-serde_json = { workspace = true }
+# near-sdk's own build guard requires one of a fixed set of cfgs/features for
+# any non-wasm32 build; hodl-model (a transitive dep here, not the crate
+# under `--test`) doesn't get `cfg(test)`, so this crate must directly
+# request the guard's documented escape hatch for non-contract usage. Cargo's
+# feature unification then activates it for the single resolved near-sdk
+# instance shared with hodl-model.
+near-sdk = { version = "5.28.3", features = ["non-contract-usage"] }
+near-workspaces = "0.23"
 
-near-sdk = { workspace = true }
-near-workspaces = { workspace = true }
+hodl-model = { path = "../model" }
 
-hodl-model = { workspace = true, features = [
-    "integration-test",
-    "integration-methods",
-    "integration-api",
-] }
-sweat-model = { workspace = true, features = ["integration-api"] }
-
-nitka = { workspace = true }
-
-multisig-model = { workspace = true }
+# Empty `[workspace]` makes this crate its own workspace root, detached from
+# the parent so it can use its own `rust-toolchain.toml` and dependency lock
+# -- near-workspaces needs a much newer dependency graph than the contract's
+# own `cargo near build` ABI-generation path tolerates. Same pattern as
+# sweat-jar's integration-tests.
+[workspace]

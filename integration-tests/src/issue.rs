@@ -1,18 +1,12 @@
 #![cfg(test)]
 
-use std::str::FromStr;
-
 use anyhow::Result;
-use hodl_model::{
-    api::{IssueApiIntegration, LockupViewApiIntegration},
-    ONE_YEAR_SEC,
-};
-use near_sdk::AccountId;
-use nitka::near_sdk::json_types::U128;
+use hodl_model::ONE_YEAR_SEC;
+use near_sdk::json_types::U128;
+use near_workspaces::AccountId;
 use rand::{distributions::Alphanumeric, Rng};
-use sweat_model::FungibleTokenCoreIntegration;
 
-use crate::context::{prepare_contract, IntegrationContext};
+use crate::{context::prepare_contract, ft, lockup};
 
 #[tokio::test]
 async fn issue_lockups() -> Result<()> {
@@ -23,36 +17,33 @@ async fn issue_lockups() -> Result<()> {
     let mut context = prepare_contract().await?;
     let manager = context.manager().await?;
 
-    context
-        .ft_contract()
-        .ft_transfer(
-            context.lockup().contract.id().clone(),
-            (LOCKUP_AMOUNT * LOCKUPS_COUNT as u128).into(),
-            None,
-        )
-        .with_user(&manager)
-        .await?;
+    ft::ft_transfer(
+        &context.ft,
+        &manager,
+        context.lockup.id(),
+        LOCKUP_AMOUNT * LOCKUPS_COUNT as u128,
+    )
+    .await?;
 
     let amounts: Vec<(AccountId, U128)> = (0..LOCKUPS_COUNT)
         .map(|_| (generate_account_id(), U128(LOCKUP_AMOUNT)))
         .collect();
-    context
-        .lockup()
-        .issue(ISSUE_DATE, amounts.clone())
-        .with_user(&manager)
-        .await?;
+    lockup::issue(&context.lockup, &manager, ISSUE_DATE, &amounts).await?;
 
-    assert_eq!(LOCKUPS_COUNT as u64, context.lockup().get_num_lockups().await? as u64);
+    assert_eq!(LOCKUPS_COUNT as u32, lockup::get_num_lockups(&context.lockup).await?);
 
-    let lockup = context.lockup().get_lockup(0).await?.unwrap();
-    assert_eq!(LOCKUP_AMOUNT, lockup.schedule.total_balance());
+    let lockup_view = lockup::get_lockup(&context.lockup, 0).await?.unwrap();
+    assert_eq!(LOCKUP_AMOUNT, lockup_view.schedule.total_balance());
 
-    let lockup = context.lockup().get_lockup(10).await?.unwrap();
-    assert_eq!(LOCKUP_AMOUNT, lockup.schedule.total_balance());
-    assert_eq!(ISSUE_DATE + ONE_YEAR_SEC, lockup.schedule.0.first().unwrap().timestamp);
+    let lockup_view = lockup::get_lockup(&context.lockup, 10).await?.unwrap();
+    assert_eq!(LOCKUP_AMOUNT, lockup_view.schedule.total_balance());
+    assert_eq!(
+        ISSUE_DATE + ONE_YEAR_SEC,
+        lockup_view.schedule.0.first().unwrap().timestamp
+    );
     assert_eq!(
         ISSUE_DATE + 4 * ONE_YEAR_SEC,
-        lockup.schedule.0.last().unwrap().timestamp
+        lockup_view.schedule.0.last().unwrap().timestamp
     );
 
     Ok(())

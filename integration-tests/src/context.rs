@@ -1,98 +1,108 @@
 #![cfg(test)]
 
-use anyhow::Result;
-use async_trait::async_trait;
-use hodl_model::api::{HodlContract, LockupApiIntegration};
-use near_workspaces::{types::NearToken, Account};
-use nitka::misc::ToNear;
-use sweat_model::{StorageManagementIntegration, SweatApiIntegration, SweatContract};
+use std::{collections::HashMap, path::PathBuf};
 
-pub const LOCKUP_CONTRACT: &str = "hodl_lockup";
-pub const FT_CONTRACT: &str = "sweat";
+use anyhow::{anyhow, Result};
+use near_workspaces::{network::Sandbox, types::NearToken, Account, Contract, Worker};
 
-pub type Context = nitka::context::Context<near_workspaces::network::Sandbox>;
+use crate::ft;
 
-#[async_trait]
-pub trait IntegrationContext {
-    async fn manager(&mut self) -> Result<Account>;
-    async fn bob(&mut self) -> Result<Account>;
-    async fn alice(&mut self) -> Result<Account>;
-    fn lockup(&self) -> HodlContract<'_>;
-    fn ft_contract(&self) -> SweatContract<'_>;
+const INITIAL_USER_BALANCE: NearToken = NearToken::from_near(50);
+
+const LOCKUP_WASM_ENV: &str = "HODL_LOCKUP_WASM";
+const FT_WASM_ENV: &str = "SWEAT_WASM";
+
+pub struct Context {
+    // Held to keep the sandbox alive for the test's lifetime.
+    pub worker: Worker<Sandbox>,
+    pub lockup: Contract,
+    pub ft: Contract,
+    accounts: HashMap<String, Account>,
 }
 
-#[async_trait]
-impl IntegrationContext for Context {
-    async fn manager(&mut self) -> Result<Account> {
-        let name = "manager";
-
+impl Context {
+    pub async fn account(&mut self, name: &str) -> Result<Account> {
         if !self.accounts.contains_key(name) {
-            let root_account = self.worker.dev_create_account().await?;
-
-            let account = root_account
+            let root = self.worker.root_account()?;
+            let account = root
                 .create_subaccount(name)
-                .initial_balance(NearToken::from_near(50))
+                .initial_balance(INITIAL_USER_BALANCE)
                 .transact()
                 .await?
                 .into_result()?;
-
             self.accounts.insert(name.to_string(), account);
         }
 
         Ok(self.accounts.get(name).unwrap().clone())
     }
 
-    async fn bob(&mut self) -> Result<Account> {
-        self.account("bob").await
-    }
-
-    async fn alice(&mut self) -> Result<Account> {
-        self.account("alice").await
-    }
-
-    fn lockup(&self) -> HodlContract<'_> {
-        HodlContract {
-            contract: &self.contracts[LOCKUP_CONTRACT],
-        }
-    }
-
-    fn ft_contract(&self) -> SweatContract<'_> {
-        SweatContract {
-            contract: &self.contracts[FT_CONTRACT],
-        }
+    pub async fn manager(&mut self) -> Result<Account> {
+        self.account("manager").await
     }
 }
 
-pub(crate) async fn prepare_contract() -> Result<Context> {
-    let mut context = Context::new(&[LOCKUP_CONTRACT, FT_CONTRACT], true, "build-integration".into()).await?;
+/// A booted sandbox with the SWEAT token and the hodl-lockup contract
+/// deployed and wired together: `manager` is a test account granted every
+/// ACL role.
+pub async fn prepare_contract() -> Result<Context> {
+    let worker = near_workspaces::sandbox().await?;
+
+    let ft = deploy(&worker, ft_wasm_path()).await?;
+    let lockup = deploy(&worker, lockup_wasm_path()).await?;
+
+    let mut context = Context {
+        worker,
+        lockup,
+        ft,
+        accounts: HashMap::new(),
+    };
 
     let manager = context.manager().await?;
 
-    context.ft_contract().new(".u.sweat.testnet".to_string().into()).await?;
-    context.ft_contract().add_oracle(&manager.to_near()).await?;
+    ft::new(&context.ft, ".u.sweat.testnet").await?;
+    ft::add_oracle(&context.ft, manager.id()).await?;
+    ft::tge_mint(&context.ft, manager.id(), 999_999_000_000_000 * 10u128.pow(18)).await?;
+    ft::storage_deposit(&context.ft, context.lockup.id()).await?;
 
-    context
-        .ft_contract()
-        .tge_mint(&manager.to_near(), (999_999_000_000_000 * 10u128.pow(18)).into())
-        .await?;
-
-    context
-        .ft_contract()
-        .storage_deposit(Some(context.lockup().contract.id().clone()), None)
-        .await?;
-
-    context
-        .lockup()
-        .new(
-            context.ft_contract().contract.id().clone(),
-            manager.to_near(),
-            vec![
-                ("DepositManager".to_string(), vec![manager.to_near()]),
-                ("StagingManager".to_string(), vec![manager.to_near()]),
-                ("UpgradeManager".to_string(), vec![manager.to_near()]),
-            ],
-        )
-        .await?;
+    crate::lockup::new(
+        &context.lockup,
+        context.ft.id(),
+        manager.id(),
+        &vec![
+            ("DepositManager".to_string(), vec![manager.id().clone()]),
+            ("StagingManager".to_string(), vec![manager.id().clone()]),
+            ("UpgradeManager".to_string(), vec![manager.id().clone()]),
+        ],
+    )
+    .await?;
 
     Ok(context)
+}
+
+fn wasm_path(env_var: &str, default: PathBuf) -> PathBuf {
+    std::env::var_os(env_var).map(PathBuf::from).unwrap_or(default)
+}
+
+fn repo_path(file: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("res").join(file)
+}
+
+fn ft_wasm_path() -> PathBuf {
+    wasm_path(FT_WASM_ENV, repo_path("sweat.wasm"))
+}
+
+/// Built with `make build-integration` (`--features integration-test`), which
+/// writes over the same `res/hodl_lockup.wasm` the production build uses.
+fn lockup_wasm_path() -> PathBuf {
+    wasm_path(LOCKUP_WASM_ENV, repo_path("hodl_lockup.wasm"))
+}
+
+async fn deploy(worker: &Worker<Sandbox>, path: PathBuf) -> Result<Contract> {
+    let bytes = std::fs::read(&path).map_err(|e| {
+        anyhow!(
+            "failed to read WASM at {} — did you run `make build-integration`? ({e})",
+            path.display()
+        )
+    })?;
+    Ok(worker.dev_deploy(&bytes).await?)
 }
