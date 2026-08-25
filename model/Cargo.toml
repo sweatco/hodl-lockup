@@ -10,13 +10,10 @@ name = "hodl_model"
 [features]
 default = []
 integration-methods = []
-integration-test = ["dep:nitka", "dep:near-workspaces"]
-integration-api = ["dep:nitka", "dep:near-workspaces"]
+integration-test = []
+integration-api = []
 release-api = []
 
 [dependencies]
 uint = { workspace = true }
 near-sdk = { workspace = true }
-nitka = { workspace = true, optional = true }
-nitka-proc = { workspace = true }
-near-workspaces = { workspace = true, optional = true }

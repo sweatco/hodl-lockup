@@ -1,11 +1,7 @@
 #![allow(clippy::new_ret_no_self)]
 #![allow(clippy::wrong_self_convention)]
 
-#[cfg(not(feature = "integration-test"))]
 use near_sdk::{json_types::U128, AccountId};
-#[cfg(feature = "integration-test")]
-use nitka::near_sdk::{json_types::U128, AccountId};
-use nitka_proc::make_integration_version;
 
 use crate::{
     lockup::{LockupClaim, LockupIndex, LockupView},
@@ -13,12 +9,6 @@ use crate::{
     TimestampSec, WrappedBalance,
 };
 
-#[cfg(feature = "integration-test")]
-pub struct HodlContract<'a> {
-    pub contract: &'a near_workspaces::Contract,
-}
-
-#[make_integration_version]
 pub trait IssueApi {
     fn issue(&mut self, issue_date: TimestampSec, amounts: Vec<(AccountId, U128)>);
 }
@@ -33,7 +23,6 @@ pub trait IssueApi {
 /// works if both live in the same module.
 pub type RoleAssignments = Vec<(String, Vec<AccountId>)>;
 
-#[make_integration_version]
 pub trait LockupApi {
     fn new(token_account_id: AccountId, super_admin_account_id: AccountId, roles: RoleAssignments) -> Self;
 
@@ -47,7 +36,6 @@ pub trait LockupApi {
     ) -> WrappedBalance;
 }
 
-#[make_integration_version]
 pub trait LockupViewApi {
     fn get_token_account_id(&self) -> AccountId;
 
